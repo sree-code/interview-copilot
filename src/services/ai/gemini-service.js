@@ -30,7 +30,16 @@ class GeminiService {
 
     this.requestQueue = [];
     this.lastRequestTime = 0;
-    this.minRequestInterval = 6000;
+    // No fixed gap by default: 429/503 responses are already retried with
+    // exponential backoff in _executeRequest, so a 6 s pause before every
+    // request only added latency. Set GEMINI_MIN_REQUEST_INTERVAL_MS to
+    // restore a floor (e.g. on a free-tier key that hits per-minute limits).
+    const configuredInterval = Number(
+      options.minRequestIntervalMs ?? process.env.GEMINI_MIN_REQUEST_INTERVAL_MS
+    );
+    this.minRequestInterval = Number.isFinite(configuredInterval) && configuredInterval > 0
+      ? configuredInterval
+      : 0;
     this.maxRetries = 3;
     this.isProcessing = false;
 
@@ -193,7 +202,10 @@ class GeminiService {
       // Streaming path: use generateContentStream when onChunk callback is provided
       if (typeof request.onChunk === 'function') {
         console.log(`[Gemini API] Streaming ${request.type} request started`);
-        const streamResult = await this.model.generateContentStream(request.data);
+        const streamResult = await this.model.generateContentStream(
+          request.data,
+          request.signal ? { signal: request.signal } : undefined
+        );
         let fullText = '';
         let chunkIndex = 0;
 
@@ -238,8 +250,9 @@ class GeminiService {
         throw error;
       }
 
-      // Skip retries if streaming chunks were already sent to avoid duplicate content
-      if (request._firstChunkSent) {
+      // Skip retries if streaming chunks were already sent to avoid duplicate
+      // content, or if the caller cancelled (e.g. interviewer interrupted).
+      if (request._firstChunkSent || request.signal?.aborted || error?.name === 'AbortError') {
         throw error;
       }
 
@@ -283,7 +296,8 @@ class GeminiService {
         data: prompt,
         resolve,
         reject,
-        onChunk: typeof options.onChunk === 'function' ? options.onChunk : null
+        onChunk: typeof options.onChunk === 'function' ? options.onChunk : null,
+        signal: options.signal || null
       };
 
       this.requestQueue.push(request);
@@ -298,7 +312,8 @@ class GeminiService {
         data: parts,
         resolve,
         reject,
-        onChunk: typeof options.onChunk === 'function' ? options.onChunk : null
+        onChunk: typeof options.onChunk === 'function' ? options.onChunk : null,
+        signal: options.signal || null
       };
 
       this.requestQueue.push(request);
@@ -349,6 +364,9 @@ class GeminiService {
       contextString,
       transcriptContext: options.transcriptContext || '',
       sessionSummary: options.sessionSummary || '',
+      screenText: options.screenText || '',
+      personalContext: options.personalContext || '',
+      programmingLanguage: this.programmingLanguage,
       screenshotCount: options.screenshotCount || 0,
       mode: options.mode || 'best-next-answer'
     });
@@ -367,6 +385,9 @@ class GeminiService {
       contextString,
       transcriptContext: options.transcriptContext || '',
       sessionSummary: options.sessionSummary || '',
+      screenText: options.screenText || '',
+      personalContext: options.personalContext || '',
+      programmingLanguage: this.programmingLanguage,
       screenshotCount: options.screenshotCount || imageParts.length,
       mode: options.mode || 'best-next-answer'
     });

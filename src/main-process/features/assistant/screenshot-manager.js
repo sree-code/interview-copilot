@@ -2,7 +2,68 @@
 const path = require('path');
 const screenshot = require('screenshot-desktop');
 
-function createScreenshotManager({ app, getMainWindow, getAppEnvironment, sendToRenderer }) {
+// Longest edge sent to the model. Full-resolution PNGs from a 4K/Retina
+// screen are several MB of base64; vision models downsample anyway, so this
+// mostly saves upload time. Override with SCREENSHOT_MAX_EDGE.
+const DEFAULT_MAX_EDGE = 1600;
+const JPEG_QUALITY = 82;
+
+function getMaxEdge() {
+  const configured = Number(process.env.SCREENSHOT_MAX_EDGE);
+  return Number.isFinite(configured) && configured >= 320 ? configured : DEFAULT_MAX_EDGE;
+}
+
+// Default encoder: downscale + JPEG via Electron's nativeImage. Falls back to
+// the original PNG when nativeImage isn't available (e.g. under plain node).
+function defaultEncodeImage(buffer) {
+  let nativeImage = null;
+  try {
+    ({ nativeImage } = require('electron'));
+  } catch (_) {
+    nativeImage = null;
+  }
+
+  if (!nativeImage || typeof nativeImage.createFromBuffer !== 'function') {
+    return { data: buffer, mimeType: 'image/png' };
+  }
+
+  let image = nativeImage.createFromBuffer(buffer);
+  if (image.isEmpty()) {
+    return { data: buffer, mimeType: 'image/png' };
+  }
+
+  const { width, height } = image.getSize();
+  const maxEdge = getMaxEdge();
+  const longest = Math.max(width, height);
+  if (longest > maxEdge) {
+    const scale = maxEdge / longest;
+    image = image.resize({
+      width: Math.round(width * scale),
+      height: Math.round(height * scale),
+      quality: 'good'
+    });
+  }
+
+  // Flat UI / code-editor screens compress far better as PNG (and stay sharp);
+  // photo-like screens (video calls) are smaller as JPEG. Keep the smaller.
+  const png = image.toPNG();
+  const jpeg = image.toJPEG(JPEG_QUALITY);
+  return jpeg.length < png.length
+    ? { data: jpeg, mimeType: 'image/jpeg' }
+    : { data: png, mimeType: 'image/png' };
+}
+
+function createScreenshotManager({
+  app,
+  getMainWindow,
+  getAppEnvironment,
+  sendToRenderer,
+  onScreenshotCaptured = null,
+  encodeImage = defaultEncodeImage
+}) {
+  // path -> { data: base64, mimeType }, so a screenshot is encoded once even
+  // when it's sent with several requests.
+  const encodedCache = new Map();
   let screenshots = [];
   let screenshotSequence = 0;
   let screenshotInProgress = false;
@@ -48,8 +109,31 @@ function createScreenshotManager({ app, getMainWindow, getAppEnvironment, sendTo
     return screenshotsDir;
   }
 
+  function getEncodedImage(filePath) {
+    const cached = encodedCache.get(filePath);
+    if (cached) {
+      return cached;
+    }
+
+    const raw = fs.readFileSync(filePath);
+    let encoded;
+    try {
+      encoded = encodeImage(raw);
+    } catch (error) {
+      console.error('Screenshot encode failed, sending original PNG:', error);
+      encoded = { data: raw, mimeType: 'image/png' };
+    }
+
+    const part = { data: Buffer.from(encoded.data).toString('base64'), mimeType: encoded.mimeType };
+    encodedCache.set(filePath, part);
+    return part;
+  }
+
   function cleanupScreenshotFile(entry) {
     const normalizedEntry = normalizeScreenshotEntry(entry);
+    if (normalizedEntry) {
+      encodedCache.delete(normalizedEntry.path);
+    }
     if (normalizedEntry && fs.existsSync(normalizedEntry.path)) {
       fs.unlinkSync(normalizedEntry.path);
     }
@@ -94,6 +178,14 @@ function createScreenshotManager({ app, getMainWindow, getAppEnvironment, sendTo
       }
 
       mainWindow.setOpacity(currentOpacity);
+
+      if (typeof onScreenshotCaptured === 'function') {
+        try {
+          onScreenshotCaptured(screenshotEntry);
+        } catch (callbackError) {
+          console.error('onScreenshotCaptured failed:', callbackError);
+        }
+      }
 
       console.log(`Screenshot saved: ${screenshotPath}`);
       console.log(`Total screenshots: ${screenshots.length}`);
@@ -144,15 +236,9 @@ function createScreenshotManager({ app, getMainWindow, getAppEnvironment, sendTo
       }
     }
 
-    const imageParts = usableEntries.map((entry) => {
-      const imageData = fs.readFileSync(entry.path);
-      return {
-        inlineData: {
-          data: imageData.toString('base64'),
-          mimeType: 'image/png'
-        }
-      };
-    });
+    const imageParts = usableEntries.map((entry) => ({
+      inlineData: getEncodedImage(entry.path)
+    }));
 
     return {
       imageParts,
@@ -200,5 +286,6 @@ function createScreenshotManager({ app, getMainWindow, getAppEnvironment, sendTo
 }
 
 module.exports = {
-  createScreenshotManager
+  createScreenshotManager,
+  defaultEncodeImage
 };

@@ -3,6 +3,7 @@ const {
   createSttHistoryManager,
   normalizeSttSource
 } = require('./stt-history');
+const { createEchoSuppressor } = require('./echo-suppressor');
 
 const ASSEMBLY_AI_SAMPLE_RATE = 16000;
 
@@ -12,7 +13,8 @@ function createAssemblyAiService({
   getAssemblyApiKey,
   getSpeechModel,
   getGeminiService,
-  sendToRenderer
+  sendToRenderer,
+  onFinalTranscript = null
 }) {
   let assemblyWsMic = null;
   let assemblyWsSystem = null;
@@ -20,6 +22,19 @@ function createAssemblyAiService({
   let isStreamingSystem = false;
 
   const sttChunkCounters = { mic: 0, system: 0 };
+
+  // Interviewer audio leaking from speakers into the mic shows up as a
+  // duplicate "You" line; drop those (see echo-suppressor.js).
+  const echoSuppressor = createEchoSuppressor({
+    onSuppressed: ({ text, matchedSystemText }) => {
+      emitSttDebug({
+        source: 'mic',
+        event: 'echo-suppressed',
+        message: 'Dropped mic line that echoed host audio',
+        meta: { text, matchedSystemText }
+      });
+    }
+  });
   const sttDroppedChunkCounters = { mic: 0, system: 0 };
 
   function emitSttDebug({ source = null, level = 'info', event = 'event', message = '', meta = null } = {}) {
@@ -215,12 +230,27 @@ function createAssemblyAiService({
                     message: 'Final transcript received',
                     meta: { chars: msg.transcript.length }
                   });
-                  sendToRenderer('vosk-final', {
-                    source: resolvedSource,
-                    text: msg.transcript
-                  });
-                  sttHistoryManager.queueSttHistorySegment(resolvedSource, msg.transcript);
+                  const emitFinal = (text) => {
+                    sendToRenderer('vosk-final', {
+                      source: resolvedSource,
+                      text
+                    });
+                    sttHistoryManager.queueSttHistorySegment(resolvedSource, text);
+                    if (typeof onFinalTranscript === 'function') {
+                      onFinalTranscript(resolvedSource, text);
+                    }
+                  };
+                  if (resolvedSource === 'system') {
+                    echoSuppressor.handleSystemFinal(msg.transcript, emitFinal);
+                  } else {
+                    echoSuppressor.handleMicFinal(msg.transcript, emitFinal);
+                  }
                 } else {
+                  if (resolvedSource === 'system') {
+                    echoSuppressor.handleSystemPartial(msg.transcript);
+                  } else if (echoSuppressor.isLikelyEchoPartial(msg.transcript)) {
+                    break;
+                  }
                   sendToRenderer('vosk-partial', {
                     source: resolvedSource,
                     text: msg.transcript
@@ -352,6 +382,9 @@ function createAssemblyAiService({
 
     const stopSource = (src) => {
       const resolvedSource = normalizeSttSource(src);
+      if (resolvedSource === 'mic') {
+        echoSuppressor.flush();
+      }
       const ws = getSourceSocket(resolvedSource);
 
       if (!ws) {

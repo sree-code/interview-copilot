@@ -13,8 +13,19 @@ export function createChatUiManager({
     addMonitorLog,
     isAutoScrollEnabled = () => true
 }) {
+    function escapeHtml(value) {
+        return value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    // Model output, transcripts and imported documents are untrusted text:
+    // escape first, then apply the small markdown subset.
     function formatResponse(text) {
-        return String(text || '')
+        return escapeHtml(String(text || ''))
             .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')

@@ -4,7 +4,8 @@
   desktopCapturer,
   globalShortcut,
   ipcMain,
-  screen
+  screen,
+  session
 } = require('electron');
 const WebSocket = require('ws');
 
@@ -33,6 +34,9 @@ const { createAssemblyAiService } = require('../services/assembly-ai/service');
 const { createOcrService } = require('../services/ocr/service');
 const { registerAssemblyAiIpc } = require('../services/assembly-ai/ipc');
 const { registerSettingsIpc } = require('./features/settings/ipc');
+const { createInterviewStores } = require('./features/interview/stores');
+const { createAnswerEngine } = require('./features/interview/answer-engine');
+const { registerInterviewIpc } = require('./features/interview/ipc');
 const { createWindowController } = require('./features/window/window-controller');
 const { DEFAULT_WINDOW_OPACITY_LEVEL } = require('./features/window/window-constants');
 const { logStartupConfiguration } = require('./startup-logging');
@@ -91,7 +95,29 @@ async function startApplication() {
     mobileServer.broadcast(channel, data);
   };
 
+  // Profile, prepared Q&A and the running session, kept in userData so the
+  // same session continues every time the app starts.
+  const path = require('path');
+  const interviewStores = createInterviewStores({
+    baseDir: path.join(app.getPath('userData'), 'interview')
+  });
+  const interviewEngine = createAnswerEngine({
+    stores: interviewStores,
+    runtime: geminiRuntime,
+    sendToRenderer
+  });
+
   const assemblyAiService = createAssemblyAiService({
+    onFinalTranscript: (source, text) => {
+      try {
+        const pending = interviewEngine.onTranscriptFinal(source, text);
+        if (pending && typeof pending.catch === 'function') {
+          pending.catch((error) => console.error('Live answer failed:', error));
+        }
+      } catch (error) {
+        console.error('Interview engine error:', error);
+      }
+    },
     WebSocket,
     desktopCapturer,
     getAssemblyApiKey: () => appState?.assemblyAiApiKey || '',
@@ -119,7 +145,14 @@ async function startApplication() {
     app,
     getMainWindow: () => windowController.getMainWindow(),
     getAppEnvironment: () => appEnvironment,
-    sendToRenderer
+    sendToRenderer,
+    // Start OCR as soon as the screenshot exists, so the AI request later
+    // doesn't wait for it. Only the Gemini path uses OCR text.
+    onScreenshotCaptured: (entry) => {
+      if (geminiRuntime.wantsOcr()) {
+        ocrService.prewarm(entry);
+      }
+    }
   });
 
   function loadPersistedAppState() {
@@ -133,6 +166,7 @@ async function startApplication() {
     const activeGeminiModel = geminiRuntime.setActiveGeminiModel(appState.geminiModel);
     const activeOllamaBaseUrl = geminiRuntime.setActiveOllamaBaseUrl(appState.ollamaBaseUrl);
     const activeOllamaModel = geminiRuntime.setActiveOllamaModel(appState.ollamaModel);
+    geminiRuntime.setFastLlmConfig(appState.fastLlm || {});
     activeAssemblyAiSpeechModel = resolveAssemblyAiSpeechModel(appState.assemblyAiSpeechModel);
     const activeProgrammingLanguage = geminiRuntime.setActiveProgrammingLanguage(appState.programmingLanguage);
     const activeWindowOpacityLevel = windowController.setWindowOpacityLevel(appState.windowOpacityLevel);
@@ -204,12 +238,22 @@ async function startApplication() {
     geminiRuntime,
     assemblyAiService,
     sendToRenderer,
-    quitApplication
+    quitApplication,
+    interviewStores,
+    interviewEngine
   });
 
   registerAssemblyAiIpc({
     ipcMain,
     assemblyAiService
+  });
+
+  registerInterviewIpc({
+    ipcMain,
+    dialog,
+    getMainWindow: () => windowController.getMainWindow(),
+    stores: interviewStores,
+    engine: interviewEngine
   });
 
   registerSettingsIpc({
@@ -238,7 +282,29 @@ async function startApplication() {
     defaultAssemblyAiSpeechModel
   });
 
+  // System ("host") audio: the renderer calls getDisplayMedia and we answer
+  // with the first screen plus loopback audio. On macOS 14.2+ Electron 39+
+  // uses the CoreAudio tap API for this (needs NSAudioCaptureUsageDescription,
+  // set in package.json build.mac.extendInfo). Works on Windows too.
+  function registerDisplayMediaLoopback() {
+    session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
+      desktopCapturer.getSources({ types: ['screen'] })
+        .then((sources) => {
+          if (!sources.length) {
+            callback({});
+            return;
+          }
+          callback({ video: sources[0], audio: 'loopback' });
+        })
+        .catch((error) => {
+          console.error('Display media request failed:', error);
+          callback({});
+        });
+    });
+  }
+
   app.whenReady().then(() => {
+    registerDisplayMediaLoopback();
     try {
       appEnvironment = loadApplicationEnvironment(app);
     } catch (error) {
@@ -270,7 +336,9 @@ async function startApplication() {
       console.log(`Persisted Gemini API key index: ${nextIndex + 1}/${geminiRuntime.getApiKeys().length}`);
     });
 
-    if (geminiRuntime.getActiveAiProvider() === 'ollama') {
+    if (geminiRuntime.getActiveAiProvider() === 'openai-compatible') {
+      geminiRuntime.initializeOpenAICompatibleService();
+    } else if (geminiRuntime.getActiveAiProvider() === 'ollama') {
       geminiRuntime.initializeOllamaService(
         geminiRuntime.getActiveOllamaBaseUrl(),
         geminiRuntime.getActiveOllamaModel(),
@@ -285,9 +353,10 @@ async function startApplication() {
     }
 
     app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
-    app.commandLine.appendSwitch('ignore-certificate-errors');
-    app.commandLine.appendSwitch('allow-running-insecure-content');
-    app.commandLine.appendSwitch('disable-web-security');
+    // Removed: ignore-certificate-errors, allow-running-insecure-content and
+    // disable-web-security. They turned off TLS validation for every request
+    // (API keys and transcripts to Gemini/AssemblyAI could be intercepted) and
+    // overrode the window's webSecurity setting.
     app.commandLine.appendSwitch('enable-media-stream');
 
     const launchHidden = startupOptions.startHidden || appEnvironment.startHidden;

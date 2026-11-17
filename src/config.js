@@ -1,6 +1,7 @@
 // AI provider configuration.
-// Supported providers: 'gemini' and 'ollama'.
-const AI_PROVIDERS = ['gemini', 'ollama'];
+// Supported providers: 'gemini', 'ollama' and 'openai-compatible'
+// (OpenAI, Groq, Cerebras, OpenRouter, Gemini's OpenAI endpoint...).
+const AI_PROVIDERS = ['gemini', 'ollama', 'openai-compatible'];
 const DEFAULT_AI_PROVIDER = 'gemini';
 
 const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434';

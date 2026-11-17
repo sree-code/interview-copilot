@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>AI Assistant</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -225,7 +226,31 @@
           <select id="setting-ai-provider" class="settings-input">
             <option value="gemini">Gemini</option>
             <option value="ollama">Ollama (Local)</option>
+            <option value="openai-compatible">Fast cloud model (Groq, OpenAI, Cerebras…)</option>
           </select>
+        </div>
+        <div id="fastllm-settings-group" class="hidden">
+          <div class="settings-group">
+            <label class="settings-label">Service</label>
+            <select id="setting-fastllm-preset" class="settings-input"></select>
+          </div>
+          <div class="settings-group">
+            <label class="settings-label">API Key</label>
+            <div class="settings-input-row">
+              <input type="password" id="setting-fastllm-key" class="settings-input" placeholder="API key for the selected service" />
+              <button type="button" id="toggle-fastllm-key-visibility" class="settings-input-toggle" aria-label="Show API key" aria-pressed="false">Show</button>
+            </div>
+          </div>
+          <div class="settings-group">
+            <label class="settings-label">Model</label>
+            <input type="text" id="setting-fastllm-model" class="settings-input" list="fastllm-model-options" />
+            <datalist id="fastllm-model-options"></datalist>
+            <div class="settings-helper-text">Run <code>npm run bench:llm</code> to measure which model answers fastest with your key.</div>
+          </div>
+          <div class="settings-group">
+            <label class="settings-label">Base URL</label>
+            <input type="text" id="setting-fastllm-base-url" class="settings-input" />
+          </div>
         </div>
         <div id="gemini-settings-group">
           <div class="settings-group">
@@ -311,6 +336,61 @@
           <div class="settings-helper-text">Shortcuts are read-only here. Edit <code>src/config.js</code> to customize.</div>
         </div>
         <button id="save-settings-btn" class="save-settings-btn">Save Settings</button>
+
+        <div class="settings-section-title">Interview profile</div>
+        <div class="settings-group">
+          <label class="settings-label" for="profile-fast-mode">
+            <input type="checkbox" id="profile-fast-mode" /> Fast mode
+          </label>
+          <div class="settings-helper-text">Answers automatically when the interviewer finishes a question, uses your prepared answers first, and restarts with a short answer if you're interrupted.</div>
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" for="profile-name">Your name</label>
+          <input type="text" id="profile-name" class="settings-input" />
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" for="profile-current-role">Current role</label>
+          <input type="text" id="profile-current-role" class="settings-input" placeholder="e.g. Senior Backend Engineer at …" />
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" for="profile-target-company">Company you're interviewing with</label>
+          <input type="text" id="profile-target-company" class="settings-input" />
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" for="profile-target-role">Job title</label>
+          <input type="text" id="profile-target-role" class="settings-input" />
+        </div>
+        <div class="settings-group">
+          <div class="settings-label-row">
+            <label class="settings-label" for="profile-job-description">Job description</label>
+            <button type="button" id="profile-import-jd" class="settings-input-toggle">Import file</button>
+          </div>
+          <textarea id="profile-job-description" class="settings-input settings-textarea" rows="5"></textarea>
+        </div>
+        <div class="settings-group">
+          <div class="settings-label-row">
+            <label class="settings-label" for="profile-resume">Resume</label>
+            <button type="button" id="profile-import-resume" class="settings-input-toggle">Import PDF</button>
+          </div>
+          <textarea id="profile-resume" class="settings-input settings-textarea" rows="6"></textarea>
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" for="profile-notes">Notes for the AI (optional)</label>
+          <textarea id="profile-notes" class="settings-input settings-textarea" rows="3" placeholder="e.g. keep answers humble, mention my AWS certification when relevant"></textarea>
+        </div>
+        <div class="settings-group">
+          <div class="settings-label-row">
+            <label class="settings-label">Prepared Q&amp;A</label>
+            <button type="button" id="profile-import-qa" class="settings-input-toggle">Import PDF</button>
+          </div>
+          <div id="profile-qa-status" class="settings-helper-text">No prepared answers loaded.</div>
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">Session</label>
+          <div id="profile-session-status" class="settings-helper-text"></div>
+          <button type="button" id="profile-clear-session" class="settings-input-toggle">Start a fresh session</button>
+        </div>
+        <button id="save-profile-btn" class="save-settings-btn">Save Profile</button>
       </div>
     </div>
 

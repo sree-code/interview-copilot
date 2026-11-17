@@ -466,12 +466,15 @@
 
     // ── WebSocket connection ──────────────────────────────────────────────────
 
+    // Pairing token from the URL the desktop app shows (?t=...).
+    const pairingToken = new URLSearchParams(location.search).get('t') || '';
+
     function connect() {
       clearTimeout(reconnectTimer);
 
       try {
         const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
-        ws = new WebSocket(`${wsScheme}://${location.host}`);
+        ws = new WebSocket(`${wsScheme}://${location.host}/?t=${encodeURIComponent(pairingToken)}`);
       } catch (err) {
         scheduleReconnect();
         return;

@@ -13,6 +13,7 @@ function getDefaultAppState() {
     geminiModel: null,
     ollamaBaseUrl: null,
     ollamaModel: null,
+    fastLlm: null,
     assemblyAiSpeechModel: null,
     programmingLanguage: null,
     windowOpacityLevel: 10,
@@ -25,7 +26,7 @@ function sanitizeAppState(state) {
 
   if (state && typeof state === 'object' && !Array.isArray(state)) {
     const aiProvider = String(state.aiProvider ?? '').trim().toLowerCase();
-    if (aiProvider === 'gemini' || aiProvider === 'ollama') {
+    if (aiProvider === 'gemini' || aiProvider === 'ollama' || aiProvider === 'openai-compatible') {
       nextState.aiProvider = aiProvider;
     }
 
@@ -54,6 +55,16 @@ function sanitizeAppState(state) {
 
     if (typeof state.ollamaModel === 'string' && state.ollamaModel.trim()) {
       nextState.ollamaModel = state.ollamaModel.trim();
+    }
+
+    if (state.fastLlm && typeof state.fastLlm === 'object' && !Array.isArray(state.fastLlm)) {
+      const pick = (value) => (typeof value === 'string' ? value.trim() : '');
+      nextState.fastLlm = {
+        preset: pick(state.fastLlm.preset),
+        baseUrl: pick(state.fastLlm.baseUrl),
+        apiKey: pick(state.fastLlm.apiKey),
+        model: pick(state.fastLlm.model)
+      };
     }
 
     if (typeof state.assemblyAiSpeechModel === 'string' && state.assemblyAiSpeechModel.trim()) {

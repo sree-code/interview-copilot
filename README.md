@@ -1,10 +1,61 @@
-# Open-Cluely
+# Meeting Assistant
 
-Open-Cluely is an Electron desktop copilot for technical interviews and live meetings. It combines AssemblyAI streaming transcription, screenshot capture, and Gemini-powered responses in a compact always-on-top window.
+A fork of [Open-Cluely](https://github.com/shubhamshnd/Open-Cluely) (MIT): an Electron desktop assistant for interviews and live meetings with AssemblyAI streaming transcription, screenshots and AI answers in a compact always-on-top window.
 
-Use it only in environments where recording, transcription, screenshots, and AI assistance are allowed.
+Use it only where recording, transcription, screenshots and AI assistance are allowed. Many companies don't allow AI help during live interviews; check first. It also works as a mock-interview practice tool.
 
-Open source alternative for Cluely and Parakeetai. Your Real-Time AI Interview Assistant 😉
+## What this fork adds
+
+- **Fast mode.** Answers appear automatically when the interviewer finishes a question. If they interrupt while an answer is still being written, it's cancelled and a short follow-up answer is written using what was said so far.
+- **Your prepared Q&A first.** Import a PDF or text file of your prepared questions and answers. When the interviewer asks one of them (even reworded, e.g. "walk me through your resume" → "Tell me about yourself"), your answer is shown instantly without calling a model. Otherwise the model answers, using close matches from your file as reference.
+- **Profile.** Your name, current role, target company, job title, job description and resume (PDF import) are used in every answer.
+- **One continuous session.** Questions, answers and what you said are kept across restarts (`<userData>/interview/`), so earlier answers stay consistent. "Start a fresh session" clears it.
+- **Answers in your own words.** What you actually say after each question is collected and used as style examples, so suggestions match your vocabulary and sentence length. (No model fine-tuning: it's done with examples in the prompt.)
+- **Fast cloud models.** Any OpenAI-compatible API: Groq, OpenAI, Cerebras, OpenRouter, Gemini's OpenAI endpoint, or a custom URL. `npm run bench:llm` measures which model answers fastest with your keys.
+- **Mic echo removed.** When the interviewer's voice leaks from your speakers into the mic, the duplicate "You" line is dropped.
+- **macOS system audio.** Electron 45 with loopback capture (CoreAudio tap on macOS 14.2+).
+- **Faster and safer.** No 6 s pause between requests; the conversation is sent once instead of three times; OCR runs in the background; screenshots are downscaled. The renderer is sandboxed with a Content-Security-Policy, TLS checks are back on, the phone companion needs a pairing token, and the app no longer disguises itself as Google Chrome.
+
+### Setup
+
+```bash
+npm install
+npm start
+```
+
+Then open Settings:
+1. **AI Provider:** pick *Fast cloud model*, choose a service (Groq has a free tier) and paste its key. Or keep Gemini.
+2. **AssemblyAI API Key:** for live transcription.
+3. **Interview profile:** fill in your details, import your resume and prepared Q&A, turn on **Fast mode**, and save.
+
+On macOS, allow the app (or Terminal, when using `npm start`) under **System Settings → Privacy & Security → Screen & System Audio Recording** and **Microphone**.
+
+### Prepared Q&A file format
+
+Any of these layouts work, in a PDF or text file:
+
+```
+Q: Tell me about yourself.
+A: I'm a backend engineer with five years in payments...
+
+Question 2: Why do you want to join Acme?
+Answer: ...
+
+3. What is your biggest weakness?
+I used to over-polish code reviews...
+```
+
+### Testing
+
+```bash
+npm test             # unit tests
+npm run bench:llm    # time-to-first-token for each model your keys can use
+npm run test:live    # end-to-end: generated interview audio -> AssemblyAI -> echo filter -> answers
+```
+
+`bench:llm` and `test:live` read keys from `.env` (see `.env.example`).
+
+---
 
 ## Looks
 

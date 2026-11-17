@@ -70,14 +70,77 @@ export function createSettingsPanelManager({
         });
     }
 
-    function updateProviderVisibility(provider) {
-        const isGemini = provider !== 'ollama';
+    // Fast cloud (OpenAI-compatible) provider fields, looked up directly.
+    const fastLlmGroup = document.getElementById('fastllm-settings-group');
+    const fastLlmPreset = document.getElementById('setting-fastllm-preset');
+    const fastLlmKey = document.getElementById('setting-fastllm-key');
+    const fastLlmKeyToggle = document.getElementById('toggle-fastllm-key-visibility');
+    const fastLlmModel = document.getElementById('setting-fastllm-model');
+    const fastLlmModelOptions = document.getElementById('fastllm-model-options');
+    const fastLlmBaseUrl = document.getElementById('setting-fastllm-base-url');
+    let fastLlmPresets = [];
 
+    function applyFastLlmPreset(presetId, { keepModel = false } = {}) {
+        const preset = fastLlmPresets.find((entry) => entry.id === presetId);
+        if (!preset) return;
+        if (fastLlmBaseUrl) fastLlmBaseUrl.value = preset.baseUrl;
+        if (fastLlmModel && !keepModel) fastLlmModel.value = preset.defaultModel;
+        if (fastLlmModelOptions) {
+            fastLlmModelOptions.innerHTML = '';
+            (preset.candidateModels || []).forEach((model) => {
+                const option = document.createElement('option');
+                option.value = model;
+                fastLlmModelOptions.appendChild(option);
+            });
+        }
+    }
+
+    function loadFastLlmSettings(settings) {
+        fastLlmPresets = Array.isArray(settings.fastLlmPresets) ? settings.fastLlmPresets : [];
+        const config = settings.fastLlm || {};
+        if (fastLlmPreset) {
+            fastLlmPreset.innerHTML = '';
+            fastLlmPresets.forEach((preset) => {
+                const option = document.createElement('option');
+                option.value = preset.id;
+                option.textContent = preset.label;
+                fastLlmPreset.appendChild(option);
+            });
+            const custom = document.createElement('option');
+            custom.value = 'custom';
+            custom.textContent = 'Custom (OpenAI-compatible URL)';
+            fastLlmPreset.appendChild(custom);
+            fastLlmPreset.value = config.preset || 'groq';
+        }
+        applyFastLlmPreset(config.preset || 'groq', { keepModel: true });
+        if (fastLlmModel) fastLlmModel.value = config.model || '';
+        if (fastLlmBaseUrl && config.baseUrl) fastLlmBaseUrl.value = config.baseUrl;
+        if (fastLlmKey) fastLlmKey.value = config.apiKey || '';
+    }
+
+    function readFastLlmSettings() {
+        return {
+            preset: fastLlmPreset ? fastLlmPreset.value : 'groq',
+            apiKey: fastLlmKey ? fastLlmKey.value.trim() : '',
+            model: fastLlmModel ? fastLlmModel.value.trim() : '',
+            baseUrl: fastLlmBaseUrl ? fastLlmBaseUrl.value.trim() : ''
+        };
+    }
+
+    fastLlmPreset?.addEventListener('change', () => applyFastLlmPreset(fastLlmPreset.value));
+    if (fastLlmKey && fastLlmKeyToggle) {
+        bindApiKeyVisibilityToggle(fastLlmKey, fastLlmKeyToggle, 'model');
+    }
+
+    function updateProviderVisibility(provider) {
         if (geminiSettingsGroup) {
-            geminiSettingsGroup.classList.toggle('hidden', !isGemini);
+            geminiSettingsGroup.classList.toggle('hidden', provider !== 'gemini');
         }
         if (ollamaSettingsGroup) {
-            ollamaSettingsGroup.classList.toggle('hidden', isGemini);
+            ollamaSettingsGroup.classList.toggle('hidden', provider !== 'ollama');
+        }
+        if (fastLlmGroup) {
+            fastLlmGroup.classList.toggle('hidden', provider !== 'openai-compatible');
         }
     }
 
@@ -104,13 +167,12 @@ export function createSettingsPanelManager({
                 fetchOllamaModelsBtn.disabled = true;
             }
 
-            const response = await fetch(`${baseUrl}/api/tags`);
-            if (!response.ok) {
-                throw new Error(`Ollama API returned ${response.status}`);
+            const result = await window.electronAPI.listOllamaModels(baseUrl);
+            if (!result?.success) {
+                throw new Error(result?.error || 'Could not reach Ollama');
             }
 
-            const data = await response.json();
-            const models = Array.isArray(data.models) ? data.models : [];
+            const models = Array.isArray(result.models) ? result.models : [];
 
             if (models.length === 0) {
                 showFeedback?.('No models found. Pull a model first with: ollama pull <model>', 'error');
@@ -251,6 +313,7 @@ export function createSettingsPanelManager({
                     settingAiProvider.value = activeProvider;
                 }
                 updateProviderVisibility(activeProvider);
+                loadFastLlmSettings(settings);
 
                 // Gemini settings
                 if (settingGeminiKey) settingGeminiKey.value = settings.geminiApiKey || '';
@@ -319,6 +382,7 @@ export function createSettingsPanelManager({
                 geminiModel: settingGeminiModel ? settingGeminiModel.value : '',
                 ollamaBaseUrl: settingOllamaBaseUrl ? settingOllamaBaseUrl.value.trim() : '',
                 ollamaModel: settingOllamaModel ? settingOllamaModel.value.trim() : '',
+                fastLlm: readFastLlmSettings(),
                 programmingLanguage: settingProgrammingLanguage.value,
                 assemblyAiSpeechModel: settingAssemblyModel.value,
                 windowOpacityLevel: normalizeWindowOpacityLevel(settingWindowOpacity?.value)

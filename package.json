@@ -1,33 +1,36 @@
 {
-  "name": "stealth-meeting-assistant",
+  "name": "meeting-assistant",
   "version": "1.0.0",
-  "description": "Invisible AI assistant for meetings - undetectable during screen share",
+  "description": "AI meeting and mock-interview assistant overlay",
   "main": "src/main.js",
   "scripts": {
     "start": "node scripts/run-electron.js",
     "start:hidden": "node scripts/run-electron.js --start-hidden",
     "dev": "node scripts/run-electron.js --enable-logging",
-    "test": "node --test test",
+    "test": "node --test \"test/**/*.test.js\"",
     "build": "node scripts/run-build.js",
     "build:win": "node scripts/run-build.js --win portable",
     "build:mac": "node scripts/run-build.js --mac",
-    "build:linux": "node scripts/run-build.js --linux"
+    "build:linux": "node scripts/run-build.js --linux",
+    "bench:llm": "node scripts/bench-llm.js",
+    "test:live": "node scripts/test-live-pipeline.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "dotenv": "^16.3.1",
+    "pdf-parse": "2.4.5",
     "screenshot-desktop": "^1.15.0",
     "tesseract.js": "^6.0.1",
     "ws": "^8.19.0"
   },
   "devDependencies": {
-    "electron": "^28.3.3",
-    "electron-builder": "^24.13.3",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.1",
     "esbuild": "^0.25.6"
   },
   "build": {
-    "appId": "com.google.chrome",
-    "productName": "Google Chrome (2)",
+    "appId": "dev.local.meeting-assistant",
+    "productName": "Meeting Assistant",
     "directories": {
       "output": "dist"
     },
@@ -42,15 +45,12 @@
     "asarUnpack": [
       "node_modules/screenshot-desktop/**/*"
     ],
-    "extraResources": [
-      {
-        "from": ".env",
-        "to": ".env"
-      }
-    ],
     "mac": {
       "category": "public.app-category.productivity",
-      "icon": "assets/chrome.icns"
+      "extendInfo": {
+        "NSAudioCaptureUsageDescription": "Transcribes the other side of your call (system audio) for live notes and answers.",
+        "NSMicrophoneUsageDescription": "Transcribes what you say for live notes and answers."
+      }
     },
     "win": {
       "target": [
@@ -61,18 +61,15 @@
           ]
         }
       ],
-      "icon": "assets/chrome.ico",
       "requestedExecutionLevel": "asInvoker",
       "verifyUpdateCodeSignature": false,
-      "publisherName": "Google LLC",
       "fileAssociations": []
     },
     "portable": {
-      "artifactName": "GoogleChrome.exe"
+      "artifactName": "MeetingAssistant-${version}.exe"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "assets/chrome.png"
+      "target": "AppImage"
     }
   },
   "author": "Shubham",

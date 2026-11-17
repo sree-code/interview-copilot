@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
 const os = require('os');
@@ -48,7 +49,49 @@ function getLanAddresses() {
 const MOBILE_PORT = 7823;
 const MOBILE_HTML_PATH = path.join(__dirname, 'mobile.html');
 
+// The server listens on every interface so a phone on the same Wi-Fi can
+// reach it. Without a secret, anyone on that network could trigger
+// screenshots and read the transcript and AI answers. A random pairing
+// token is generated per launch and must be in the page URL and the
+// WebSocket URL (?t=...).
+function createPairingToken() {
+  const fromEnv = String(process.env.MOBILE_PAIRING_TOKEN || '').trim();
+  return fromEnv.length >= 16 ? fromEnv : crypto.randomBytes(18).toString('base64url');
+}
+
+function isTokenValid(requestUrl, expectedToken) {
+  let provided = '';
+  try {
+    provided = new URL(requestUrl || '/', 'http://localhost').searchParams.get('t') || '';
+  } catch (_) {
+    return false;
+  }
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expectedToken);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function isMobileServerDisabled() {
+  return ['off', '0', 'false', 'no'].includes(String(process.env.MOBILE_SERVER || '').trim().toLowerCase());
+}
+
+function createDisabledMobileServer(notifyDesktop) {
+  const status = { listening: false, port: MOBILE_PORT, urls: [], clientCount: 0, error: 'Disabled (MOBILE_SERVER=off)' };
+  const emitStatus = () => {
+    if (typeof notifyDesktop === 'function') {
+      try { notifyDesktop('mobile-server-status', { ...status }); } catch (_) { /* ignore */ }
+    }
+  };
+  return { broadcast() {}, getStatus: () => ({ ...status }), emitStatus, close() {} };
+}
+
 function createMobileServer({ getGeminiRuntime, getScreenshotManager, notifyDesktop }) {
+  if (isMobileServerDisabled()) {
+    console.log('[MobileServer] Disabled by MOBILE_SERVER=off');
+    return createDisabledMobileServer(notifyDesktop);
+  }
+
+  const pairingToken = createPairingToken();
   const clients = new Set();
   const status = {
     listening: false,
@@ -69,7 +112,7 @@ function createMobileServer({ getGeminiRuntime, getScreenshotManager, notifyDesk
       name,
       address,
       virtual: !!virtual,
-      url: `http://${address}:${MOBILE_PORT}`
+      url: `http://${address}:${MOBILE_PORT}/?t=${encodeURIComponent(pairingToken)}`
     }));
   }
 
@@ -100,6 +143,11 @@ function createMobileServer({ getGeminiRuntime, getScreenshotManager, notifyDesk
     const url = (req.url || '/').split('?')[0];
 
     if (url === '/' || url === '/index.html') {
+      if (!isTokenValid(req.url, pairingToken)) {
+        res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Pairing token required. Open the full URL shown in the desktop app.');
+        return;
+      }
       try {
         const html = fs.readFileSync(MOBILE_HTML_PATH, 'utf8');
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -117,7 +165,10 @@ function createMobileServer({ getGeminiRuntime, getScreenshotManager, notifyDesk
 
   // ── WebSocket server ───────────────────────────────────────────────────────
 
-  const wss = new WebSocketServer({ server: httpServer });
+  const wss = new WebSocketServer({
+    server: httpServer,
+    verifyClient: ({ req }) => isTokenValid(req.url, pairingToken)
+  });
 
   wss.on('connection', (ws) => {
     clients.add(ws);
@@ -161,7 +212,7 @@ function createMobileServer({ getGeminiRuntime, getScreenshotManager, notifyDesk
 
         // ── Ask AI ─────────────────────────────────────────────────────────
         case 'ask-ai': {
-          if (!geminiRuntime || !geminiRuntime.hasApiKeys()) {
+          if (!geminiRuntime || !geminiRuntime.isActiveProviderReady()) {
             sendTo(ws, 'error', { message: 'No API key configured. Add it in the desktop Settings.' });
             break;
           }
@@ -266,7 +317,7 @@ function createMobileServer({ getGeminiRuntime, getScreenshotManager, notifyDesk
     status.error = null;
     emitStatus();
     console.log(`[MobileServer] Listening on 0.0.0.0:${MOBILE_PORT}`);
-    console.log(`[MobileServer] Local:   http://localhost:${MOBILE_PORT}`);
+    console.log(`[MobileServer] Local:   http://localhost:${MOBILE_PORT}/?t=${encodeURIComponent(pairingToken)}`);
     for (const { name, url, virtual } of status.urls) {
       const tag = virtual ? '  [virtual — phone probably cannot reach]' : '';
       console.log(`[MobileServer] Network: ${url}  (${name})${tag}`);
@@ -302,4 +353,4 @@ function createMobileServer({ getGeminiRuntime, getScreenshotManager, notifyDesk
   };
 }
 
-module.exports = { createMobileServer };
+module.exports = { createMobileServer, isTokenValid };

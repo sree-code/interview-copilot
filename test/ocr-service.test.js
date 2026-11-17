@@ -61,3 +61,43 @@ test('keeps Gemini screenshot analysis image-first while including OCR as supple
   assert.match(prompt, /Extracted screen text \(supplemental\)/);
   assert.match(prompt, /source of truth/);
 });
+
+test('prewarm starts OCR once; the later request reuses the result', async () => {
+  let calls = 0;
+  const ocr = createOcrService({
+    createWorker: async () => ({
+      recognize: async () => { calls += 1; return { data: { text: 'two sum' } }; },
+      terminate: async () => {}
+    }),
+    fsModule: { existsSync: () => true, readFileSync: () => 'img' }
+  });
+
+  ocr.prewarm({ id: 'ss-1', path: 'a.png' });
+  const text = await ocr.extractTextFromEntries([{ id: 'ss-1', path: 'a.png' }]);
+
+  assert.equal(text, '[Screenshot ss-1]\ntwo sum');
+  assert.equal(calls, 1);
+  await ocr.dispose();
+});
+
+test('a time budget skips OCR that is still running instead of blocking the AI call', async () => {
+  const ocr = createOcrService({
+    createWorker: async () => ({
+      recognize: (image) => new Promise((resolve) => {
+        setTimeout(() => resolve({ data: { text: image } }), image === 'slow' ? 500 : 0);
+      }),
+      terminate: async () => {}
+    }),
+    fsModule: { existsSync: () => true, readFileSync: (p) => (p === 'slow.png' ? 'slow' : 'fast') }
+  });
+
+  const started = Date.now();
+  const text = await ocr.extractTextFromEntries(
+    [{ id: 'ss-1', path: 'fast.png' }, { id: 'ss-2', path: 'slow.png' }],
+    { budgetMs: 50 }
+  );
+
+  assert.equal(text, '[Screenshot ss-1]\nfast');
+  assert.ok(Date.now() - started < 400, 'should not wait for the slow screenshot');
+  await ocr.dispose();
+});

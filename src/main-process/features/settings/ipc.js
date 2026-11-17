@@ -1,3 +1,5 @@
+const { OPENAI_COMPATIBLE_PRESETS } = require('../../../services/ai/openai-compatible-service');
+
 function registerSettingsIpc({
   ipcMain,
   app,
@@ -35,6 +37,14 @@ function registerSettingsIpc({
       ollamaModel: geminiRuntime.getActiveOllamaModel(),
       defaultOllamaBaseUrl: geminiRuntime.getDefaultOllamaBaseUrl(),
       defaultOllamaModel: geminiRuntime.getDefaultOllamaModel(),
+      fastLlm: geminiRuntime.getFastLlmConfig(),
+      fastLlmPresets: Object.entries(OPENAI_COMPATIBLE_PRESETS).map(([id, preset]) => ({
+        id,
+        label: preset.label,
+        baseUrl: preset.baseUrl,
+        defaultModel: preset.defaultModel,
+        candidateModels: preset.candidateModels
+      })),
       programmingLanguage: geminiRuntime.getActiveProgrammingLanguage(),
       programmingLanguages: geminiRuntime.getProgrammingLanguages(),
       defaultProgrammingLanguage: geminiRuntime.getDefaultProgrammingLanguage(),
@@ -80,6 +90,9 @@ function registerSettingsIpc({
       const nextGeminiModel = geminiRuntime.setActiveGeminiModel(settings.geminiModel);
       const nextOllamaBaseUrl = geminiRuntime.setActiveOllamaBaseUrl(settings.ollamaBaseUrl);
       const nextOllamaModel = geminiRuntime.setActiveOllamaModel(settings.ollamaModel);
+      const nextFastLlm = settings.fastLlm && typeof settings.fastLlm === 'object'
+        ? geminiRuntime.setFastLlmConfig(settings.fastLlm)
+        : geminiRuntime.getFastLlmConfig();
       const nextAssemblyModel = setAssemblyAiSpeechModel(settings.assemblyAiSpeechModel);
       const nextProgrammingLanguage = geminiRuntime.setActiveProgrammingLanguage(settings.programmingLanguage);
       const nextWindowOpacityLevel = windowController.setWindowOpacityLevel(settings.windowOpacityLevel);
@@ -102,6 +115,7 @@ function registerSettingsIpc({
         geminiModel: nextGeminiModel,
         ollamaBaseUrl: nextOllamaBaseUrl,
         ollamaModel: nextOllamaModel,
+        fastLlm: nextFastLlm,
         assemblyAiSpeechModel: nextAssemblyModel,
         programmingLanguage: nextProgrammingLanguage,
         windowOpacityLevel: nextWindowOpacityLevel
@@ -116,7 +130,10 @@ function registerSettingsIpc({
       console.log('Applied programming language:', nextProgrammingLanguage);
       console.log(`Applied window opacity level: ${nextWindowOpacityLevel}/10`);
 
-      if (nextAiProvider === 'ollama') {
+      if (nextAiProvider === 'openai-compatible') {
+        console.log(`Applied fast model provider: ${nextFastLlm.preset} / ${nextFastLlm.model}`);
+        geminiRuntime.initializeOpenAICompatibleService();
+      } else if (nextAiProvider === 'ollama') {
         console.log(`Applied Ollama model: ${nextOllamaModel} at ${nextOllamaBaseUrl}`);
         geminiRuntime.initializeOllamaService(
           nextOllamaBaseUrl,

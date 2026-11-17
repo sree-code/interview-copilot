@@ -378,7 +378,12 @@ export function createTranscriptionManager({
 
         try {
             const sources = await window.electronAPI.getDesktopSources();
-            if (!sources || sources.length === 0) throw new Error('No desktop sources found');
+            if (!sources || sources.length === 0) {
+                throw new Error(
+                    'No screen source available. On macOS, allow this app (or Terminal/your IDE when using npm start) '
+                    + 'in System Settings > Privacy & Security > Screen & System Audio Recording, then restart it.'
+                );
+            }
             const sourceId = sources[0].id;
             addMonitorLog('info', 'desktop-source', `Using desktop source: ${sources[0].name || sourceId}`, 'system');
 

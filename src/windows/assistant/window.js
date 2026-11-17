@@ -33,14 +33,15 @@ function createAssistantWindow({
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
+      // Bundled by scripts/bundle-preload.js (needed because sandbox is on).
+      preload: path.join(__dirname, 'preload.bundle.js'),
       backgroundThrottling: false,
       offscreen: false,
-      webSecurity: false,
-      allowRunningInsecureContent: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
       experimentalFeatures: false,
       enableRemoteModule: false,
-      sandbox: false
+      sandbox: true
     },
     frame: false,
     transparent: true,
@@ -166,8 +167,8 @@ function createAssistantWindow({
     console.error('Failed to load:', errorCode, errorDescription);
   });
 
-  mainWindow.webContents.on('console-message', (event, level, message) => {
-    console.log(`Renderer console.${level}: ${message}`);
+  mainWindow.webContents.on('console-message', (event) => {
+    console.log(`Renderer console.${event.level}: ${event.message}`);
   });
 
   if (nodeEnv === 'development') {

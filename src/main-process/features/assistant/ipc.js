@@ -1,4 +1,12 @@
-﻿function registerAssistantIpc({
+﻿// OCR is supplemental (the model also gets the image). OCR is started when the
+// screenshot is taken, so it's usually done already; if not, don't hold the
+// AI request for more than this.
+const OCR_BUDGET_MS = (() => {
+  const configured = Number(process.env.OCR_BUDGET_MS);
+  return Number.isFinite(configured) && configured >= 0 ? configured : 1200;
+})();
+
+function registerAssistantIpc({
   ipcMain,
   screenshotManager,
   ocrService,
@@ -6,7 +14,9 @@
   geminiRuntime,
   assemblyAiService,
   sendToRenderer,
-  quitApplication
+  quitApplication,
+  interviewStores = null,
+  interviewEngine = null
 }) {
   let chatContext = [];
 
@@ -27,7 +37,7 @@
     }
 
     if (normalizedMessage.includes('no api key configured') || normalizedMessage.includes('no gemini api key')) {
-      return 'No Gemini API key configured. Add it in Settings.';
+      return 'No API key configured for the selected AI provider. Add it in Settings.';
     }
 
     if (
@@ -78,9 +88,9 @@
     console.log('Programming language preference:', geminiRuntime.getActiveProgrammingLanguage());
     console.log('Screenshots count:', screenshotManager.getScreenshotsCount());
 
-    if (!geminiRuntime.hasApiKeys()) {
+    if (!geminiRuntime.isActiveProviderReady()) {
       sendToRenderer('analysis-result', {
-        error: 'No Gemini API key configured. Add it in Settings.'
+        error: 'No API key configured for the selected AI provider. Add it in Settings.'
       });
       return;
     }
@@ -112,8 +122,8 @@
       };
       sendToRenderer('ai-stream-start', { actionId: 'screenAi' });
 
-      const ocrText = geminiRuntime.getActiveAiProvider() === 'gemini'
-        ? await ocrService.extractTextFromEntries(entries)
+      const ocrText = geminiRuntime.wantsOcr()
+        ? await ocrService.extractTextFromEntries(entries, { budgetMs: OCR_BUDGET_MS })
         : '';
       const text = await geminiRuntime.executeWithKeyFailover((geminiService) => {
         if (!geminiService || !geminiService.model) {
@@ -149,6 +159,34 @@
   async function analyzeForMeeting() {
     await analyzeForMeetingWithContext();
   }
+
+  // Ollama model list is fetched here, not in the renderer, so the renderer
+  // can run with webSecurity on (no cross-origin fetches from the page).
+  ipcMain.handle('list-ollama-models', async (_event, baseUrlInput) => {
+    let baseUrl;
+    try {
+      baseUrl = new URL(String(baseUrlInput || '').trim() || 'http://localhost:11434');
+    } catch (_) {
+      return { success: false, error: 'Invalid Ollama URL' };
+    }
+    if (baseUrl.protocol !== 'http:' && baseUrl.protocol !== 'https:') {
+      return { success: false, error: 'Ollama URL must start with http:// or https://' };
+    }
+
+    try {
+      const response = await fetch(new URL('/api/tags', baseUrl), { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) {
+        return { success: false, error: `Ollama API returned ${response.status}` };
+      }
+      const data = await response.json();
+      const models = Array.isArray(data?.models)
+        ? data.models.map((model) => ({ name: String(model?.name || '') })).filter((model) => model.name)
+        : [];
+      return { success: true, models };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
 
   ipcMain.handle('get-screenshots-count', () => {
     return screenshotManager.getScreenshotsCount();
@@ -193,8 +231,8 @@
     try {
       assemblyAiService.flushAllSttHistoryBuffers('pre-ask-ai');
 
-      if (!geminiRuntime.hasApiKeys()) {
-        throw new Error('No Gemini API key configured. Add it in Settings.');
+      if (!geminiRuntime.isActiveProviderReady()) {
+        throw new Error('No API key configured for the selected AI provider. Add it in Settings.');
       }
 
       const transcriptContext = typeof payload?.transcriptContext === 'string'
@@ -222,6 +260,14 @@
       const onChunk = ({ text, index }) => {
         sendToRenderer('ai-stream-chunk', { actionId: 'askAi', text, index });
       };
+
+      // Profile, prepared answers, earlier Q&A and speaking style.
+      const lastInterviewerQuestion = interviewStores
+        ? ([...interviewStores.getEvents()].reverse().find((event) => event.kind === 'host')?.text || '')
+        : '';
+      const personalContext = interviewEngine
+        ? interviewEngine.personalContextFor(lastInterviewerQuestion || transcriptContext.slice(-600))
+        : '';
       sendToRenderer('ai-stream-start', { actionId: 'askAi' });
 
       let usedScreenshots = false;
@@ -237,8 +283,8 @@
         if (imageParts.length > 0) {
           usedScreenshots = true;
           usedScreenshotCount = imageParts.length;
-          const ocrText = geminiRuntime.getActiveAiProvider() === 'gemini'
-            ? await ocrService.extractTextFromEntries(entries)
+          const ocrText = geminiRuntime.wantsOcr()
+            ? await ocrService.extractTextFromEntries(entries, { budgetMs: OCR_BUDGET_MS })
             : '';
           text = await geminiRuntime.executeWithKeyFailover((geminiService) => {
             if (!geminiService || !geminiService.model) {
@@ -247,7 +293,9 @@
 
             return geminiService.askAiWithSessionContextAndScreenshots(imageParts, {
               contextString,
-              transcriptContext: [transcriptContext, ocrText].filter(Boolean).join('\n\n'),
+              transcriptContext,
+              screenText: ocrText,
+              personalContext,
               sessionSummary,
               screenshotCount: imageParts.length,
               mode,
@@ -266,11 +314,20 @@
           return geminiService.askAiWithSessionContext({
             contextString,
             transcriptContext,
+            personalContext,
             sessionSummary,
             screenshotCount: usedScreenshots ? usedScreenshotCount : 0,
             mode,
             onChunk
           });
+        });
+      }
+
+      if (interviewStores && text) {
+        interviewStores.appendEvent('answer', text, {
+          question: lastInterviewerQuestion || '(asked manually)',
+          source: 'llm',
+          trigger: 'manual'
         });
       }
 
@@ -320,8 +377,8 @@
   ipcMain.handle('suggest-response', async (_event, context) => {
     try {
       assemblyAiService.flushAllSttHistoryBuffers('pre-suggest');
-      if (!geminiRuntime.hasApiKeys()) {
-        throw new Error('No Gemini API key configured. Add it in Settings.');
+      if (!geminiRuntime.isActiveProviderReady()) {
+        throw new Error('No API key configured for the selected AI provider. Add it in Settings.');
       }
 
       const payload = typeof context === 'object' && context !== null
@@ -362,8 +419,8 @@
   ipcMain.handle('generate-meeting-notes', async (_event, payload = {}) => {
     try {
       assemblyAiService.flushAllSttHistoryBuffers('pre-notes');
-      if (!geminiRuntime.hasApiKeys()) {
-        throw new Error('No Gemini API key configured. Add it in Settings.');
+      if (!geminiRuntime.isActiveProviderReady()) {
+        throw new Error('No API key configured for the selected AI provider. Add it in Settings.');
       }
 
       const contextStringOverride = typeof payload?.contextString === 'string'
@@ -398,8 +455,8 @@
   ipcMain.handle('generate-follow-up-email', async () => {
     try {
       assemblyAiService.flushAllSttHistoryBuffers('pre-followup');
-      if (!geminiRuntime.hasApiKeys()) {
-        throw new Error('No Gemini API key configured. Add it in Settings.');
+      if (!geminiRuntime.isActiveProviderReady()) {
+        throw new Error('No API key configured for the selected AI provider. Add it in Settings.');
       }
 
       const email = await geminiRuntime.executeWithKeyFailover((geminiService) => {
@@ -420,8 +477,8 @@
   ipcMain.handle('answer-question', async (_event, question) => {
     try {
       assemblyAiService.flushAllSttHistoryBuffers('pre-answer');
-      if (!geminiRuntime.hasApiKeys()) {
-        throw new Error('No Gemini API key configured. Add it in Settings.');
+      if (!geminiRuntime.isActiveProviderReady()) {
+        throw new Error('No API key configured for the selected AI provider. Add it in Settings.');
       }
 
       const answer = await geminiRuntime.executeWithKeyFailover((geminiService) => {
@@ -442,8 +499,8 @@
   ipcMain.handle('get-conversation-insights', async (_event, payload = {}) => {
     try {
       assemblyAiService.flushAllSttHistoryBuffers('pre-insights');
-      if (!geminiRuntime.hasApiKeys()) {
-        throw new Error('No Gemini API key configured. Add it in Settings.');
+      if (!geminiRuntime.isActiveProviderReady()) {
+        throw new Error('No API key configured for the selected AI provider. Add it in Settings.');
       }
 
       const contextStringOverride = typeof payload?.contextString === 'string'

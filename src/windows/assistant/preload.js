@@ -10,12 +10,14 @@ try {
   console.error('PreloadAPI: Failed to expose electronAPI:', error);
 }
 
-process.on('uncaughtException', (error) => {
-  console.error('PreloadAPI: Uncaught exception:', error);
-});
+if (typeof process !== 'undefined' && typeof process.on === 'function') {
+  process.on('uncaughtException', (error) => {
+    console.error('PreloadAPI: Uncaught exception:', error);
+  });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('PreloadAPI: Unhandled rejection at:', promise, 'reason:', reason);
-});
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('PreloadAPI: Unhandled rejection at:', promise, 'reason:', reason);
+  });
+}
 
 console.log('PreloadAPI: Preload script loaded successfully');

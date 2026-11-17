@@ -71,7 +71,52 @@ export function createAudioPipeline({ sendAudioChunk, addMonitorLog }) {
     return label.includes('camera') || label.includes('webcam');
   }
 
+  // Preferred path (Electron 39+): getDisplayMedia, answered in the main
+  // process with audio: 'loopback'. This is the only path that captures
+  // system audio on macOS. If macOS permission is missing, Chromium still
+  // returns an audio track but it is already 'ended' and silent.
+  async function getLoopbackDisplayStream() {
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+      return null;
+    }
+
+    const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+    const audioTrack = stream.getAudioTracks()[0];
+
+    if (!audioTrack) {
+      stream.getTracks().forEach((track) => track.stop());
+      throw new Error('No system audio track returned by the OS.');
+    }
+
+    if (audioTrack.readyState === 'ended') {
+      stream.getTracks().forEach((track) => track.stop());
+      throw new Error(
+        'System audio permission is missing. On macOS allow it under System Settings > Privacy & Security > '
+        + 'Screen & System Audio Recording (for the app, or for Terminal/your IDE when running npm start), then restart.'
+      );
+    }
+
+    return stream;
+  }
+
   async function getSystemAudioStream(sourceId) {
+    try {
+      const loopbackStream = await getLoopbackDisplayStream();
+      if (loopbackStream) {
+        addMonitorLog('info', 'loopback-capture', 'Using getDisplayMedia loopback audio', 'system');
+        return loopbackStream;
+      }
+    } catch (loopbackError) {
+      if (/permission is missing/.test(loopbackError.message)) {
+        throw loopbackError;
+      }
+      addMonitorLog('info', 'loopback-fallback', `Loopback capture failed (${loopbackError.message}); trying legacy desktop capture`, 'system');
+    }
+
+    return getLegacyDesktopAudioStream(sourceId);
+  }
+
+  async function getLegacyDesktopAudioStream(sourceId) {
     const mandatoryConstraints = {
       audio: {
         mandatory: {

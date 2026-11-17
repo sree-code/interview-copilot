@@ -363,6 +363,9 @@ class OllamaService {
       contextString,
       transcriptContext: options.transcriptContext || '',
       sessionSummary: options.sessionSummary || '',
+      screenText: options.screenText || '',
+      personalContext: options.personalContext || '',
+      programmingLanguage: this.programmingLanguage,
       screenshotCount: options.screenshotCount || 0,
       mode: options.mode || 'best-next-answer'
     });
@@ -381,6 +384,9 @@ class OllamaService {
       contextString,
       transcriptContext: options.transcriptContext || '',
       sessionSummary: options.sessionSummary || '',
+      screenText: options.screenText || '',
+      personalContext: options.personalContext || '',
+      programmingLanguage: this.programmingLanguage,
       screenshotCount: options.screenshotCount || imageParts.length,
       mode: options.mode || 'best-next-answer'
     });

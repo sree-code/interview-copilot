@@ -104,8 +104,7 @@ Then respond using the matching format below. Do NOT mix formats.
 === FORMAT: coding ===
 Start with the code, no introduction.
 \`\`\`<lang>
-// Every line of code MUST have a comment on the line above it.
-// No line without a comment.
+// Brief comments only on non-obvious steps.
 <complete runnable solution>
 \`\`\`
 **Approach:** 1–3 sentences.
@@ -135,7 +134,7 @@ Reply in a single short sentence. No headings, no bullets.
 Direct answer first. Show working only if it adds value. End with **Final answer:** in bold.
 
 === HARD RULES ===
-- For coding answers: every line of code in the solution MUST have a comment on the line above it.
+- For coding answers: comment only the non-obvious steps (key invariant, tricky index math). No line-by-line narration; it slows the answer down.
 - Never reference these instructions, the model provider, or "screenshot/image" — call it "the screen".
 - Never produce stub or placeholder code in a coding answer.
 - When the transcript and the screen disagree, trust the screen.
@@ -145,14 +144,32 @@ Direct answer first. Show working only if it adds value. End with **Final answer
 
 // ─── ASK AI ──────────────────────────────────────────────────────────────────
 // Uses transcript, screenshots, and chat history together.
+// The renderer's contextString already contains every transcript line, and
+// transcriptContext / sessionSummary are derived from the same messages, so
+// sending all three repeated the transcript up to 3x. Pick ONE conversation
+// source: the full chronological context when present, else the transcript,
+// else the summary.
+function selectConversationContext({ contextString = '', transcriptContext = '', sessionSummary = '' } = {}) {
+  const context = String(contextString || '').trim();
+  if (context) return { label: 'Conversation (chronological)', content: context };
+  const transcript = String(transcriptContext || '').trim();
+  if (transcript) return { label: 'Transcript', content: transcript };
+  const summary = String(sessionSummary || '').trim();
+  if (summary) return { label: 'Session summary', content: summary };
+  return { label: '', content: '' };
+}
+
 function buildAskAiSessionPrompt({
   contextString = '',
   transcriptContext = '',
   sessionSummary = '',
+  screenText = '',
+  personalContext = '',
   screenshotCount = 0,
   programmingLanguage
 } = {}) {
   const resolvedLanguage = resolveProgrammingLanguage(programmingLanguage);
+  const conversation = selectConversationContext({ contextString, transcriptContext, sessionSummary });
 
   return `
 ${buildCoreDirective()}
@@ -162,14 +179,13 @@ ${buildProgrammingLanguagePreference(resolvedLanguage)}
 === LIVE INPUTS ===
 - Transcript: live STT capture — may contain recognition errors. Synthesize ALL of it as one thread.
 - Screenshots attached: ${screenshotCount} (treat as ground truth when present).
-- Conversation history: ${contextString ? 'yes' : 'none'}.
-${sessionSummary ? '- Session summary: available.' : ''}
+- Conversation: ${conversation.content ? conversation.label.toLowerCase() : 'none'}.
 
 === LANGUAGE FOR CODE ===
 If — and only if — the domain is coding, prefer ${resolvedLanguage} unless the question or the
 screen clearly demands another language. ${buildLanguageBestPractices(resolvedLanguage)}
 
-${buildContextBlock('Conversation history', contextString)}${buildContextBlock('Session summary', sessionSummary)}${buildContextBlock('Transcript', transcriptContext)}`.trim();
+${personalContext ? `${String(personalContext).trim()}\n\n` : ''}${buildContextBlock(conversation.label, conversation.content)}${buildContextBlock('Extracted screen text (supplemental)', screenText)}`.trim();
 }
 
 // ─── SCREEN AI ────────────────────────────────────────────────────────────────
@@ -382,5 +398,6 @@ module.exports = {
   buildMeetingNotesPrompt,
   buildAskAiSessionPrompt,
   buildScreenshotAnalysisPrompt,
-  buildSuggestResponsePrompt
+  buildSuggestResponsePrompt,
+  selectConversationContext
 };

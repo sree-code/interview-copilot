@@ -7,6 +7,9 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
+const { bundlePreload } = require('./bundle-preload');
+
+bundlePreload();
 
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;

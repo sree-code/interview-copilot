@@ -10,6 +10,8 @@ import { setupIpcListeners as setupIpcListenersModule } from './renderer/feature
 import { createShortcutManager } from './renderer/features/settings/shortcut-manager.js';
 import { createSettingsPanelManager } from './renderer/features/settings/settings-panel-manager.js';
 import { createTranscriptionManager } from './renderer/features/transcription/transcription-manager.js';
+import { createInterviewProfilePanel } from './renderer/features/interview/profile-panel.js';
+import { createLiveAnswerView } from './renderer/features/interview/live-answers.js';
 
 import {
     createTranscriptionSourceState,
@@ -316,6 +318,40 @@ const transcriptionManager = createTranscriptionManager({
 });
 
 // Initialize
+// Fast-mode answers streamed from the main process + the profile form.
+async function setupInterviewFeatures() {
+    if (!window.electronAPI?.interviewGetState) return;
+
+    createLiveAnswerView({
+        addChatMessage,
+        updateChatMessageContent: (id, content) => chatUiManager.updateChatMessageContent(id, content),
+        hideLoadingOverlay
+    }).bind();
+
+    const profilePanel = createInterviewProfilePanel({
+        showFeedback,
+        onFastModeChanged: (enabled) => {
+            document.body.classList.toggle('fast-mode-on', enabled);
+        }
+    });
+    profilePanel.bind();
+
+    try {
+        const state = await profilePanel.load();
+        if (state?.session?.questions > 0) {
+            addChatMessage(
+                'system',
+                `Continuing your session (${state.session.questions} earlier interviewer lines, ${state.session.answers} answers).`
+                + (state.profile.fastMode ? ' Fast mode is on.' : '')
+            );
+        } else if (state?.profile?.fastMode) {
+            addChatMessage('system', 'Fast mode is on: answers appear when the interviewer finishes a question.');
+        }
+    } catch (error) {
+        console.error('Failed to load interview profile:', error);
+    }
+}
+
 async function init() {
     console.log('Initializing renderer with Vosk Live Transcription...');
 
@@ -329,6 +365,7 @@ async function init() {
     const settings = await loadShortcutConfig();
     setupEventListeners();
     setupIpcListeners();
+    await setupInterviewFeatures();
     setupWindowAdjustments();
     if (chatAutoScrollToggle) {
         chatAutoScrollToggle.addEventListener('click', () => setAutoScrollEnabled(!autoScrollEnabledState));
@@ -576,6 +613,8 @@ function applyApiKeyAvailabilityFromSettings(settings) {
     // Ollama doesn't require API keys, so treat it as always configured
     if (settings.aiProvider === 'ollama') {
         hasGeminiApiKeysConfigured = true;
+    } else if (settings.aiProvider === 'openai-compatible') {
+        hasGeminiApiKeysConfigured = Boolean(settings.fastLlm?.apiKey || /localhost|127\.0\.0\.1/.test(settings.fastLlm?.baseUrl || ''));
     } else if (typeof settings.hasGeminiApiKeys === 'boolean') {
         hasGeminiApiKeysConfigured = settings.hasGeminiApiKeys;
     } else {

@@ -1,6 +1,10 @@
 const GeminiService = require('../../../services/ai/gemini-service');
 const OllamaService = require('../../../services/ai/ollama-service');
 const {
+  OpenAICompatibleService,
+  resolvePreset
+} = require('../../../services/ai/openai-compatible-service');
+const {
   resolveAiProvider,
   getAiProviders,
   getDefaultAiProvider,
@@ -15,6 +19,21 @@ const {
 } = require('../../../config');
 
 const GEMINI_ALL_KEYS_UNAVAILABLE_ERROR_CODE = 'GEMINI_ALL_KEYS_UNAVAILABLE';
+
+// Fills gaps from the preset and from environment variables
+// (FAST_LLM_PRESET, FAST_LLM_BASE_URL, FAST_LLM_MODEL, FAST_LLM_API_KEY or
+// the preset's own key variable, e.g. GROQ_API_KEY).
+function normalizeFastLlmConfig(config = {}) {
+  const presetName = String(config.preset || process.env.FAST_LLM_PRESET || 'groq').trim().toLowerCase();
+  const preset = resolvePreset(presetName);
+  const envKey = preset?.envKey ? process.env[preset.envKey] : '';
+  return {
+    preset: presetName,
+    baseUrl: String(config.baseUrl || process.env.FAST_LLM_BASE_URL || preset?.baseUrl || '').trim().replace(/\/+$/, ''),
+    apiKey: String(config.apiKey || process.env.FAST_LLM_API_KEY || envKey || '').trim(),
+    model: String(config.model || process.env.FAST_LLM_MODEL || preset?.defaultModel || '').trim()
+  };
+}
 
 function normalizeGeminiApiKeys(keys) {
   const sourceValues = Array.isArray(keys)
@@ -39,6 +58,9 @@ function normalizeGeminiApiKeys(keys) {
 function createGeminiRuntime() {
   let geminiService = null;
   let ollamaService = null;
+  let openAiCompatibleService = null;
+  // { preset, baseUrl, apiKey, model } for the 'openai-compatible' provider.
+  let fastLlmConfig = normalizeFastLlmConfig({});
   let activeAiProvider = getDefaultAiProvider();
   let activeGeminiModel = getDefaultGeminiModel();
   let activeProgrammingLanguage = getDefaultProgrammingLanguage();
@@ -258,6 +280,21 @@ function createGeminiRuntime() {
       throw new Error('AI failover operation must be a function.');
     }
 
+    if (activeAiProvider === 'openai-compatible') {
+      if (!openAiCompatibleService) {
+        initializeOpenAICompatibleService();
+      }
+      if (!openAiCompatibleService) {
+        throw new Error('Fast model provider is not configured. Add its API key in Settings.');
+      }
+      return await operation(openAiCompatibleService, {
+        activeApiKeyIndex: 0,
+        activeApiKey: fastLlmConfig.apiKey,
+        attempt: 1,
+        totalKeys: 1
+      });
+    }
+
     // For Ollama, no key failover — just execute directly
     if (activeAiProvider === 'ollama') {
       if (!ollamaService) {
@@ -363,7 +400,51 @@ function createGeminiRuntime() {
     }
   }
 
+  function setFastLlmConfig(config = {}) {
+    fastLlmConfig = normalizeFastLlmConfig({ ...fastLlmConfig, ...config });
+    return { ...fastLlmConfig };
+  }
+
+  function getFastLlmConfig() {
+    return { ...fastLlmConfig };
+  }
+
+  function initializeOpenAICompatibleService() {
+    try {
+      openAiCompatibleService = new OpenAICompatibleService({
+        preset: fastLlmConfig.preset,
+        baseUrl: fastLlmConfig.baseUrl,
+        apiKey: fastLlmConfig.apiKey,
+        modelName: fastLlmConfig.model,
+        programmingLanguage: activeProgrammingLanguage
+      });
+      console.log(`Fast model provider ready: ${fastLlmConfig.preset} / ${fastLlmConfig.model}`);
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize fast model provider:', error.message);
+      openAiCompatibleService = null;
+      return false;
+    }
+  }
+
+  // Whether the active provider has what it needs to answer.
+  function isActiveProviderReady() {
+    if (activeAiProvider === 'ollama') return true;
+    if (activeAiProvider === 'openai-compatible') {
+      return Boolean(fastLlmConfig.baseUrl && (fastLlmConfig.apiKey || /localhost|127\.0\.0\.1/.test(fastLlmConfig.baseUrl)));
+    }
+    return hasApiKeys();
+  }
+
+  // OCR text helps every provider except a local Ollama text model.
+  function wantsOcr() {
+    return activeAiProvider !== 'ollama';
+  }
+
   function initializeAiService() {
+    if (activeAiProvider === 'openai-compatible') {
+      return initializeOpenAICompatibleService();
+    }
     if (activeAiProvider === 'ollama') {
       return initializeOllamaService(activeOllamaBaseUrl, activeOllamaModel, activeProgrammingLanguage);
     }
@@ -398,6 +479,9 @@ function createGeminiRuntime() {
   }
 
   function getService() {
+    if (activeAiProvider === 'openai-compatible') {
+      return openAiCompatibleService;
+    }
     if (activeAiProvider === 'ollama') {
       return ollamaService;
     }
@@ -428,6 +512,11 @@ function createGeminiRuntime() {
 
   return {
     initializeGeminiService,
+    initializeOpenAICompatibleService,
+    setFastLlmConfig,
+    getFastLlmConfig,
+    isActiveProviderReady,
+    wantsOcr,
     initializeOllamaService,
     initializeAiService,
     setKeys,

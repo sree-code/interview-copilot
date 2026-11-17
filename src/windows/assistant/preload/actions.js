@@ -14,6 +14,48 @@ function createInvokeActions(ipcRenderer) {
       fallback: (error) => ({ error: error.message })
     }),
 
+    interviewGetState: invokeWithFallback(ipcRenderer, {
+      channel: 'interview-get-state',
+      label: 'interviewGetState',
+      fallback: (error) => ({ error: error.message })
+    }),
+
+    interviewSaveProfile: invokeWithFallback(ipcRenderer, {
+      channel: 'interview-save-profile',
+      label: 'interviewSaveProfile',
+      fallback: (error) => ({ success: false, error: error.message })
+    }),
+
+    interviewImportText: invokeWithFallback(ipcRenderer, {
+      channel: 'interview-import-text',
+      label: 'interviewImportText',
+      fallback: (error) => ({ success: false, error: error.message })
+    }),
+
+    interviewImportQa: invokeWithFallback(ipcRenderer, {
+      channel: 'interview-import-qa',
+      label: 'interviewImportQa',
+      fallback: (error) => ({ success: false, error: error.message })
+    }),
+
+    interviewClearSession: invokeWithFallback(ipcRenderer, {
+      channel: 'interview-clear-session',
+      label: 'interviewClearSession',
+      fallback: (error) => ({ success: false, error: error.message })
+    }),
+
+    interviewAnswerLastQuestion: invokeWithFallback(ipcRenderer, {
+      channel: 'interview-answer-last-question',
+      label: 'interviewAnswerLastQuestion',
+      fallback: (error) => ({ success: false, error: error.message })
+    }),
+
+    listOllamaModels: invokeWithFallback(ipcRenderer, {
+      channel: 'list-ollama-models',
+      label: 'listOllamaModels',
+      fallback: (error) => ({ success: false, error: error.message })
+    }),
+
     takeStealthScreenshot: invokeWithFallback(ipcRenderer, {
       channel: 'take-stealth-screenshot',
       label: 'takeStealthScreenshot',

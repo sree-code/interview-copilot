@@ -2233,3 +2233,30 @@ body.theme-dark .monitor-log-list::-webkit-scrollbar-thumb:hover,
 body.theme-dark .settings-body::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.58);
 }
+
+/* Interview profile */
+.settings-section-title {
+  margin: 20px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.settings-textarea {
+  min-height: 72px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.live-answer-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.75;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
