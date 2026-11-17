@@ -35,7 +35,8 @@ test('streams deltas from an SSE chat-completions response', async () => {
   assert.deepEqual(chunks, ['Hello', ' there']);
   assert.equal(calls[0].url, 'https://api.groq.com/openai/v1/chat/completions');
   assert.equal(calls[0].init.headers.Authorization, 'Bearer k');
-  assert.equal(JSON.parse(calls[0].init.body).model, 'llama-3.3-70b-versatile');
+  assert.equal(JSON.parse(calls[0].init.body).model, 'openai/gpt-oss-20b');
+  assert.equal(JSON.parse(calls[0].init.body).reasoning_effort, 'low');
 });
 
 test('sends screenshots as image parts only when the model supports vision', async () => {

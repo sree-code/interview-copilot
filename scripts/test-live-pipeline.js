@@ -134,7 +134,9 @@ async function main() {
   });
   stores.saveBank(BANK, 'mock-qa');
 
-  const results = { finals: { system: [], mic: [] }, echoDropped: [], answers: [] };
+  const results = { finals: { system: [], mic: [] }, echoDropped: [], answers: [], turnDelays: [] };
+  let lineEnds;
+  let frameSentAt = [];
   const answerTimers = new Map();
 
   const engine = createAnswerEngine({
@@ -165,7 +167,7 @@ async function main() {
     WebSocket,
     desktopCapturer: null,
     getAssemblyApiKey: () => process.env.ASSEMBLY_AI_API_KEY,
-    getSpeechModel: () => 'universal-streaming-english',
+    getSpeechModel: () => process.env.ASSEMBLY_AI_SPEECH_MODEL || 'universal-streaming-english',
     getGeminiService: () => null,
     sendToRenderer: (channel, data) => {
       if (channel === 'vosk-error') log(`STT error [${data.source}]: ${data.error || data.message}`);
@@ -176,6 +178,12 @@ async function main() {
     },
     onFinalTranscript: (source, text) => {
       results.finals[source].push(text);
+      if (source === 'system' && typeof lineEnds !== 'undefined') {
+        // Delay since the frame holding the end of the latest finished
+        // interviewer line was actually sent.
+        const spokenEnd = lineEnds.filter((mark) => mark.who === 'host' && frameSentAt[mark.endFrame]).pop();
+        if (spokenEnd) results.turnDelays.push(Math.round(Date.now() - frameSentAt[spokenEnd.endFrame]));
+      }
       log(`${source === 'system' ? 'INTERVIEWER' : 'YOU        '}: ${text}`);
       const promise = engine.onTranscriptFinal(source, text);
       if (promise) pending.push(promise);
@@ -189,6 +197,9 @@ async function main() {
   await new Promise((resolve) => setTimeout(resolve, 1500));
 
   console.log('\nStreaming audio in real time...\n');
+  const streamStartedAt = Date.now();
+  frameSentAt = [];
+  lineEnds = tracks.marks.map((mark) => ({ ...mark, endFrame: Math.floor((mark.endsAt * SAMPLE_RATE) / FRAME_SAMPLES) }));
   const frames = Math.ceil(tracks.host.length / FRAME_SAMPLES);
   for (let frame = 0; frame < frames; frame += 1) {
     const from = frame * FRAME_SAMPLES;
@@ -196,7 +207,10 @@ async function main() {
       const chunk = track.slice(from, from + FRAME_SAMPLES);
       assembly.handleAudioChunk({ source, data: Buffer.from(chunk.buffer) });
     }
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    frameSentAt[frame] = Date.now();
+    // Keep exact real-time pace (no drift from timer overhead).
+    const nextAt = streamStartedAt + (frame + 1) * 100;
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, nextAt - Date.now())));
   }
 
   await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -216,6 +230,9 @@ async function main() {
   console.log(`Your lines transcribed: ${results.finals.mic.length}; echo lines dropped: ${results.echoDropped.length}; echo that got through: ${echoedIntoMic.length}`);
   console.log(`Prepared answers used: ${bankAnswers.length} (expected 2: introduce yourself, weaknesses)`);
   console.log(`Model answers: ${modelAnswers.length}; interrupted: ${results.answers.filter((a) => a.interrupted).length}; errors: ${results.answers.filter((a) => a.error).length}`);
+  if (results.turnDelays.length) {
+    console.log(`Interviewer stops talking -> final transcript: ${results.turnDelays.join(' ms, ')} ms`);
+  }
   if (firstTokenTimes.length) {
     console.log(`Model time to first text: ${firstTokenTimes.join(' ms, ')} ms`);
   }

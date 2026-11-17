@@ -17,8 +17,10 @@ const OPENAI_COMPATIBLE_PRESETS = {
   groq: {
     label: 'Groq',
     baseUrl: 'https://api.groq.com/openai/v1',
-    defaultModel: 'llama-3.3-70b-versatile',
-    candidateModels: ['llama-3.3-70b-versatile', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'llama-3.1-8b-instant'],
+    // Measured 2026-11-17 on a free-tier key: gpt-oss-20b ~0.2 s to first
+    // token, ~0.3 s full answer. Llama models weren't enabled for that key.
+    defaultModel: 'openai/gpt-oss-20b',
+    candidateModels: ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'llama-3.3-70b-versatile'],
     supportsVision: false,
     envKey: 'GROQ_API_KEY'
   },
@@ -55,6 +57,12 @@ const OPENAI_COMPATIBLE_PRESETS = {
     envKey: 'GEMINI_API_KEY'
   }
 };
+
+// gpt-oss models think before answering. At "medium" effort the thinking
+// used up the token limit and answers were cut off; "low" uses ~10 tokens.
+function defaultExtraBodyFor(modelName) {
+  return /(^|\/)gpt-oss-/.test(String(modelName || '')) ? { reasoning_effort: 'low' } : {};
+}
 
 function resolvePreset(name) {
   return OPENAI_COMPATIBLE_PRESETS[String(name || '').toLowerCase()] || null;
@@ -102,14 +110,17 @@ async function readChatCompletionStream(body, onDelta) {
 
 class OpenAICompatibleService extends OllamaService {
   constructor(options = {}) {
-    super({ programmingLanguage: options.programmingLanguage });
+    super({ programmingLanguage: options.programmingLanguage, quiet: true });
     const preset = resolvePreset(options.preset);
     this.preset = options.preset || 'custom';
     this.baseUrl = String(options.baseUrl || preset?.baseUrl || '').replace(/\/+$/, '');
     this.apiKey = String(options.apiKey || '').trim();
     this.modelName = String(options.modelName || preset?.defaultModel || '').trim();
     this.supportsVision = options.supportsVision ?? preset?.supportsVision ?? false;
-    this.extraBody = options.extraBody && typeof options.extraBody === 'object' ? options.extraBody : {};
+    this.extraBody = {
+      ...defaultExtraBodyFor(this.modelName),
+      ...(options.extraBody && typeof options.extraBody === 'object' ? options.extraBody : {})
+    };
     this.maxOutputTokens = Number(options.maxOutputTokens) > 0 ? Number(options.maxOutputTokens) : null;
     this.fetchImpl = options.fetchImpl || fetch;
     this.minRequestInterval = 0;
@@ -163,7 +174,15 @@ class OpenAICompatibleService extends OllamaService {
       ...this.extraBody
     };
     const maxTokens = request.maxOutputTokens || this.maxOutputTokens;
-    if (maxTokens) body.max_tokens = maxTokens;
+    if (maxTokens) {
+      // OpenAI's current models reject max_tokens; most other
+      // OpenAI-compatible services only understand max_tokens.
+      if (this.preset === 'openai') {
+        body.max_completion_tokens = maxTokens;
+      } else {
+        body.max_tokens = maxTokens;
+      }
+    }
     return body;
   }
 

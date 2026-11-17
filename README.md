@@ -55,6 +55,19 @@ npm run test:live    # end-to-end: generated interview audio -> AssemblyAI -> ec
 
 `bench:llm` and `test:live` read keys from `.env` (see `.env.example`).
 
+Measured on 2026-11-17 with free-tier keys (Groq + AssemblyAI) on a mock interview:
+
+| Step | Time |
+|---|---|
+| Interviewer stops talking → transcript | ~0.4–0.5 s (`universal-streaming-english`) |
+| Prepared answer shown | instant |
+| Model's first words (Groq `openai/gpt-oss-20b`) | ~0.27–0.39 s |
+| Echo lines removed | 4 of 4 |
+
+For slightly faster transcripts (~0.25–0.35 s), use AssemblyAI's newer model:
+`ASSEMBLY_AI_SPEECH_MODEL=universal-3-6-pro ASSEMBLY_AI_STREAM_PARAMS=mode=min_latency npm run test:live`
+(in the app, pick it under Settings → AssemblyAI Speech Model once added there). It costs more per hour; check AssemblyAI's pricing page.
+
 ---
 
 ## Looks

@@ -34,7 +34,18 @@ function routeQuestion(question, qaIndex) {
   if (!qaIndex || qaIndex.size === 0 || !String(question || '').trim()) {
     return { direct: null, references: [] };
   }
-  const candidates = qaIndex.search(question, { limit: 3 });
+  // Interviewers wrap questions in small talk ("Thanks for joining. Could
+  // you introduce yourself?"), so also score each sentence on its own and
+  // keep the best score per prepared question.
+  const sentences = String(question).split(/(?<=[.?!])\s+/).filter((part) => part.trim().split(/\s+/).length >= 2);
+  const best = new Map();
+  for (const text of [question, ...(sentences.length > 1 ? sentences : [])]) {
+    for (const candidate of qaIndex.search(text, { limit: 3 })) {
+      const existing = best.get(candidate.question);
+      if (!existing || candidate.score > existing.score) best.set(candidate.question, candidate);
+    }
+  }
+  const candidates = [...best.values()].sort((a, b) => b.score - a.score).slice(0, 3);
   const [top] = candidates;
   if (top && top.score >= DIRECT_MATCH_THRESHOLD) {
     return { direct: top, references: [] };

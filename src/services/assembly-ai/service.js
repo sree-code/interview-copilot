@@ -163,6 +163,12 @@ function createAssemblyAiService({
         format_turns: 'true',
         speech_model: getSpeechModel()
       });
+      // Optional extra streaming parameters, e.g. turn-detection tuning:
+      // ASSEMBLY_AI_STREAM_PARAMS="mode=min_latency" (Universal-3 Pro models)
+      // or "max_turn_silence=700". See AssemblyAI's turn-detection docs.
+      for (const [key, value] of new URLSearchParams(String(process.env.ASSEMBLY_AI_STREAM_PARAMS || ''))) {
+        queryParams.set(key, value);
+      }
 
       const wsUrl = `wss://streaming.assemblyai.com/v3/ws?${queryParams.toString()}`;
 
@@ -275,6 +281,14 @@ function createAssemblyAiService({
               resetSourceState(resolvedSource);
               sendToRenderer('vosk-stopped', { source: resolvedSource });
               break;
+
+            case 'Error': {
+              const detail = String(msg.error || msg.message || 'Unknown AssemblyAI error');
+              console.error(`AssemblyAI error [${resolvedSource}]:`, detail);
+              emitSttDebug({ source: resolvedSource, level: 'error', event: 'server-error', message: detail });
+              sendToRenderer('vosk-error', { source: resolvedSource, error: `AssemblyAI: ${detail}` });
+              break;
+            }
 
             default:
               console.log(`AssemblyAI message [${resolvedSource}]:`, msg.type);

@@ -43,7 +43,9 @@ class OllamaService {
     this.lastResetTime = Date.now();
     this.apiKey = '';
 
-    console.log('OllamaService initialized:', this.modelName, 'at', this.baseUrl);
+    if (!options.quiet) {
+      console.log('OllamaService initialized:', this.modelName, 'at', this.baseUrl);
+    }
   }
 
   updateConfiguration(options = {}) {

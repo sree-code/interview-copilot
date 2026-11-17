@@ -81,3 +81,15 @@ for (const asked of SHOULD_NOT_MATCH) {
     assert.ok(!top || top.score < DIRECT_MATCH_THRESHOLD, `matched "${top?.question}" at ${top?.score.toFixed(2)}`);
   });
 }
+
+const { routeQuestion } = require('../src/main-process/features/interview/personal-context');
+
+test('small talk around the question still finds the prepared answer', () => {
+  const route = routeQuestion('Thanks for joining today. Could you introduce yourself?', BANK);
+  assert.equal(route.direct?.answer, 'A1');
+});
+
+test('small talk alone does not trigger a prepared answer', () => {
+  const route = routeQuestion('Thanks for joining today. Great to meet you.', BANK);
+  assert.equal(route.direct, null);
+});
