@@ -28,7 +28,7 @@ Then open Settings:
 2. **AssemblyAI API Key:** for live transcription.
 3. **Interview profile:** fill in your details, import your resume and prepared Q&A, turn on **Fast mode**, and save.
 
-**Windows (main setup):**
+**Windows (main setup):** full walkthrough in [WINDOWS_SETUP.md](WINDOWS_SETUP.md).
 - Easiest: download the installer from the latest [Windows build](../../actions/workflows/windows.yml) run (open the run → *Artifacts* → `meeting-assistant-windows`), or build it yourself with `npm run build:win`.
 - The app isn't code-signed, so SmartScreen may say "Windows protected your PC": click **More info → Run anyway**.
 - Allow the microphone under **Settings → Privacy & security → Microphone** ("Let desktop apps access your microphone").
