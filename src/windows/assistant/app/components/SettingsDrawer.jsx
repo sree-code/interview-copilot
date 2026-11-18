@@ -17,7 +17,7 @@ import { Badge } from '@astryxdesign/core/Badge';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { Divider } from '@astryxdesign/core/Divider';
 import { Icon } from '@astryxdesign/core/Icon';
-import { Upload } from 'lucide-react';
+import { Link2, Upload } from 'lucide-react';
 
 import { useSessionState, useStore } from '../useStore.js';
 
@@ -158,7 +158,45 @@ function AiTab() {
 }
 
 // ── Interview profile ──
-const PROFILE_FIELDS = ['name', 'currentRole', 'targetCompany', 'targetRole', 'jobDescription', 'resumeText', 'notes'];
+const PROFILE_FIELDS = ['name', 'currentRole', 'targetCompany', 'targetRole', 'jobDescription', 'resumeText', 'notes', 'keyterms', 'language', 'answerTiming'];
+const LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'it', label: 'Italian' },
+  { value: 'pt', label: 'Portuguese' }
+];
+const TIMING_OPTIONS = [
+  { value: 'balanced', label: 'Balanced', description: 'Waits for a natural pause (AssemblyAI default).' },
+  { value: 'fast', label: 'Faster', description: 'Answers after a shorter pause. May split a slow question.' }
+];
+
+function JobUrlImport({ onImported }) {
+  const { actions } = useStore();
+  const [url, setUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    if (!url.trim()) return;
+    setBusy(true);
+    try {
+      const job = await actions.importJobUrl(url.trim());
+      onImported(job);
+      actions.toast('Filled from the job post. Check it, then click Save profile.');
+      setUrl('');
+    } catch (error) {
+      actions.toast(error.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <HStack gap={2} vAlign="end">
+      <TextInput label="Job post link" isOptional width="100%" value={url} onChange={setUrl} onEnter={go} placeholder="https://boards.greenhouse.io/… or a LinkedIn / Lever / company careers link" />
+      <Button label="Import" size="md" icon={<Icon icon={Link2} />} isLoading={busy} clickAction={go} />
+    </HStack>
+  );
+}
 
 function ProfileTab() {
   const { actions } = useStore();
@@ -169,6 +207,8 @@ function ProfileTab() {
   useEffect(() => {
     if (!interview?.profile || form) return;
     setForm(Object.fromEntries(PROFILE_FIELDS.map((key) => [key, interview.profile[key] || ''])));
+    // Enum fields need a valid default.
+    setForm((f) => ({ ...f, language: f.language || 'en', answerTiming: f.answerTiming || 'balanced' }));
   }, [interview, form]);
 
   if (!interview) return <Text color="secondary">The interview features aren't available.</Text>;
@@ -201,6 +241,11 @@ function ProfileTab() {
       <Section title="About you and the job" description="Used in every answer so it sounds like you and fits the role.">
         <TextInput label="Your name" value={form.name} onChange={(name) => patch({ name })} />
         <TextInput label="Current role" value={form.currentRole} onChange={(currentRole) => patch({ currentRole })} placeholder="e.g. Senior Backend Engineer at …" />
+        <JobUrlImport onImported={(job) => patch({
+          ...(job.company ? { targetCompany: job.company } : {}),
+          ...(job.role ? { targetRole: job.role } : {}),
+          jobDescription: job.jobDescription
+        })} />
         <HStack gap={3}>
           <TextInput label="Company you're interviewing with" value={form.targetCompany} onChange={(targetCompany) => patch({ targetCompany })} width="100%" />
           <TextInput label="Job title" value={form.targetRole} onChange={(targetRole) => patch({ targetRole })} width="100%" />
@@ -214,6 +259,20 @@ function ProfileTab() {
           <TextArea label="Resume" rows={6} value={form.resumeText} onChange={(resumeText) => patch({ resumeText })} />
         </VStack>
         <TextArea label="Notes for the AI" isOptional rows={3} value={form.notes} onChange={(notes) => patch({ notes })} placeholder="e.g. keep answers humble, mention my AWS certification when relevant" />
+        <TextArea
+          label="Key terms"
+          isOptional
+          rows={2}
+          value={form.keyterms}
+          onChange={(keyterms) => patch({ keyterms })}
+          placeholder="Comma separated, e.g. Kubernetes, gRPC, your project names"
+          description="Helps transcription spell names right. Tech words from your resume and the job description are added automatically (up to 100)."
+        />
+        <HStack gap={3}>
+          <Selector label="Interview language" options={LANGUAGE_OPTIONS} value={form.language} onChange={(language) => patch({ language })} description="Transcription and answers." width="100%" />
+          <Selector label="Answer timing" options={TIMING_OPTIONS} value={form.answerTiming} onChange={(answerTiming) => patch({ answerTiming })} description="When the interviewer counts as done." width="100%" />
+        </HStack>
+        <Text size="sm" color="secondary">Language, timing and key terms apply the next time you start listening.</Text>
         <HStack hAlign="end"><Button label="Save profile" variant="primary" clickAction={() => run('Profile saved', () => actions.saveProfile({ ...interview.profile, ...form }))} /></HStack>
       </Section>
 
@@ -248,6 +307,15 @@ function ProfileTab() {
       </Section>
     </VStack>
   );
+}
+
+function updateText(update = {}) {
+  if (!update.supported) return 'Automatic updates work in the installed Windows app. Otherwise: git pull, npm ci, npm start (see the README).';
+  if (update.state === 'ready') return `Version ${update.version} is downloaded and installs when you restart.`;
+  if (update.state === 'downloading') return `Downloading version ${update.version || ''}${update.percent ? ` (${update.percent}%)` : ''}…`;
+  if (update.state === 'checking') return 'Checking for updates…';
+  if (update.state === 'error') return 'Could not check for updates. It tries again later.';
+  return 'Up to date. Checks GitHub Releases every few hours.';
 }
 
 // ── Window ──
@@ -288,12 +356,64 @@ function WindowTab() {
           formatValue={(v) => `${v}%`}
         />
         <Slider label="Whole window opacity" description="Fades everything, text included." min={1} max={10} step={1} value={opacity} onChange={setOpacity} onChangeEnd={saveOpacity} formatValue={(v) => `${v}/10`} />
+        <Slider
+          label="Text size"
+          description="Alt+Shift+= bigger, Alt+Shift+- smaller, Alt+Shift+0 reset."
+          min={0.8}
+          max={1.8}
+          step={0.05}
+          value={state.prefs.textZoom}
+          onChange={(value) => actions.setPref('textZoom', value)}
+          formatValue={(v) => `${Math.round(v * 100)}%`}
+        />
       </Section>
-      <Section title="During the interview" description="Compact mode shows only the interviewer's latest line and the latest answer, in a small strip at the top center of the screen, just under the webcam.">
+      <Section title="During the interview" description="Compact mode shows only the interviewer's latest line and one answer, in a small strip at the top center of the screen, just under the webcam. Alt+Shift+Left/Right flips between answers, Alt+Shift+Up/Down scrolls.">
         <Switch label="Compact mode (Alt+Shift+M)" value={state.compact} onChange={(on) => actions.setCompact(on)} />
+        <Switch
+          label="Click-through in compact mode"
+          description="Clicks go to the meeting app under the strip, except on its top bar and buttons."
+          value={state.prefs.clickThrough}
+          onChange={(on) => actions.setPref('clickThrough', on)}
+        />
+        <Switch
+          label="Never take keyboard focus in compact mode"
+          description="Typing in the meeting or your code editor is never interrupted. Buttons still work."
+          value={state.prefs.noFocus}
+          onChange={(on) => actions.setPref('noFocus', on)}
+        />
+        <Switch
+          label="Ctrl+Enter answers while listening"
+          description="Ctrl+Enter = Ask AI, Ctrl+Shift+Enter = screenshot and answer. Only while listening. Leave off for coding rounds where Ctrl+Enter runs your code."
+          value={state.prefs.callShortcuts}
+          onChange={(on) => actions.setPref('callShortcuts', on)}
+        />
+        <Switch
+          label="Offer to listen when a call starts"
+          description="When Zoom, Teams, Meet, Webex, Slack or Discord starts using the microphone (Windows), or a Zoom meeting starts (Mac)."
+          value={state.prefs.meetingDetect}
+          onChange={(on) => actions.setPref('meetingDetect', on)}
+        />
         <HStack gap={2}>
           <Button label="Move under webcam (Alt+Shift+W)" size="sm" onClick={actions.moveTopCenter} />
+          <Button label="Next screen (Alt+Shift+D)" size="sm" variant="secondary" onClick={actions.nextScreen} />
         </HStack>
+      </Section>
+      <Section
+        title="Privacy"
+        description={state.telemetry?.configured
+          ? "Anonymous usage and speed stats help the app's author make it faster: timings, errors, which features are used, app version, OS and your country (from your IP). Never transcripts, answers, your profile, files or keys."
+          : 'Usage stats are turned off in this build. Nothing is sent anywhere except to your AI and transcription services.'}
+      >
+        {state.telemetry?.configured && (
+          <Switch
+            label="Share anonymous usage stats"
+            value={state.telemetry.consent === true}
+            onChange={(on) => actions.setTelemetryConsent(on)}
+          />
+        )}
+      </Section>
+      <Section title="Updates" description={updateText(state.update)}>
+        {state.update?.state === 'ready' && <HStack><Button label="Restart and install" size="sm" onClick={actions.installUpdate} /></HStack>}
       </Section>
     </VStack>
   );

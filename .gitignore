@@ -63,3 +63,4 @@ logs.txt
 src/windows/assistant/app.bundle.js
 src/windows/assistant/app.bundle.css
 src/windows/assistant/app-assets/
+src/windows/assistant/app-chunks/

@@ -59,8 +59,31 @@ function createScreenshotManager({
   getAppEnvironment,
   sendToRenderer,
   onScreenshotCaptured = null,
-  encodeImage = defaultEncodeImage
+  encodeImage = defaultEncodeImage,
+  screen = null
 }) {
+  // With several monitors, capture the one the assistant window is on (the
+  // one you moved it to with "Next screen"). Displays are matched by their
+  // left-to-right order; screenshot-desktop reports physical pixels and
+  // Electron scaled ones, so coordinates can't be compared directly.
+  async function screenOptionsForWindow(mainWindow) {
+    try {
+      if (!screen || process.platform !== 'win32') return {};
+      const displays = screen.getAllDisplays();
+      if (displays.length < 2) return {};
+      const current = screen.getDisplayMatching(mainWindow.getBounds());
+      const byPosition = (a, b) => (a.x - b.x) || (a.y - b.y);
+      const index = displays.map((d) => d.bounds).sort(byPosition).findIndex((b) => b.x === current.bounds.x && b.y === current.bounds.y);
+      const shots = (await screenshot.listDisplays())
+        .map((d) => ({ ...d, x: d.left, y: d.top }))
+        .sort(byPosition);
+      return index >= 0 && shots[index] ? { screen: shots[index].id } : {};
+    } catch (error) {
+      console.warn('Could not pick the screen to capture, using the main one:', error.message);
+      return {};
+    }
+  }
+
   // path -> { data: base64, mimeType }, so a screenshot is encoded once even
   // when it's sent with several requests.
   const encodedCache = new Map();
@@ -164,7 +187,7 @@ function createScreenshotManager({
       const screenshotsDir = ensureScreenshotsDir();
       const screenshotPath = path.join(screenshotsDir, `stealth-${Date.now()}.png`);
 
-      await screenshot({ filename: screenshotPath });
+      await screenshot({ filename: screenshotPath, ...(await screenOptionsForWindow(mainWindow)) });
 
       const screenshotEntry = {
         id: nextScreenshotId(),

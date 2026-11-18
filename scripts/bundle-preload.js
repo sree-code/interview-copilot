@@ -29,12 +29,16 @@ function bundlePreload() {
 
 function bundleApp() {
   const dir = path.join(root, 'src', 'windows', 'assistant');
+  // Lazy-loaded parts (Settings) are split into app-chunks/; clear old ones.
+  require('fs').rmSync(path.join(dir, 'app-chunks'), { recursive: true, force: true });
   esbuild.buildSync({
     entryPoints: { 'app.bundle': path.join(dir, 'app', 'main.jsx') },
     outdir: dir,
     bundle: true,
     platform: 'browser',
     format: 'esm',
+    splitting: true,
+    chunkNames: 'app-chunks/[name]-[hash]',
     target: 'chrome130',
     jsx: 'automatic',
     minify: true,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Theme } from '@astryxdesign/core/theme';
 import { ToastViewport, useToast } from '@astryxdesign/core/Toast';
 import { AlertDialog } from '@astryxdesign/core/AlertDialog';
@@ -9,10 +9,62 @@ import { neutralTheme } from '@astryxdesign/theme-neutral/built';
 import { useSessionState, useStore } from './useStore.js';
 import { TopBar } from './components/TopBar.jsx';
 import { Conversation } from './components/Conversation.jsx';
-import { SettingsDrawer } from './components/SettingsDrawer.jsx';
 import { CompactView } from './components/CompactView.jsx';
 import { ResizeHandles } from './components/ResizeHandles.jsx';
 import { useLocalShortcuts } from './components/useLocalShortcuts.js';
+
+// Settings is the biggest part of the UI and isn't needed at startup.
+const SettingsDrawer = lazy(() => import('./components/SettingsDrawer.jsx').then((m) => ({ default: m.SettingsDrawer })));
+
+// One notice at a time, most important first: a call just started, an
+// update is ready, the one-time question about sharing usage stats.
+function Notices({ onOpenSettings }) {
+  const { actions } = useStore();
+  const state = useSessionState();
+  if (state.meeting) {
+    return (
+      <div className="notice-row">
+        <Banner
+          status="info"
+          title={`${state.meeting.label} is using your microphone. Start listening?`}
+          endContent={<>
+            <Button label="Listen" size="sm" onClick={actions.startFromMeeting} />
+            <Button label="Not now" size="sm" variant="ghost" onClick={actions.dismissMeeting} />
+          </>}
+        />
+      </div>
+    );
+  }
+  if (state.compact) return null;
+  if (state.update?.state === 'ready') {
+    return (
+      <div className="notice-row">
+        <Banner
+          status="success"
+          title={`Version ${state.update.version || 'update'} is ready.`}
+          description="Restart to install it, or it installs when you close the app."
+          endContent={<Button label="Restart now" size="sm" variant="secondary" onClick={actions.installUpdate} />}
+        />
+      </div>
+    );
+  }
+  if (state.telemetry?.askUser) {
+    return (
+      <div className="notice-row">
+        <Banner
+          status="info"
+          title="Share anonymous usage and speed stats with the app's author?"
+          description="Helps make it faster. Sends timings, errors and which features are used, plus your country (from your IP). Never your transcripts, answers, profile, files or keys. Change it any time in Settings."
+          endContent={<>
+            <Button label="Share" size="sm" onClick={() => actions.setTelemetryConsent(true)} />
+            <Button label="No thanks" size="sm" variant="ghost" onClick={() => actions.setTelemetryConsent(false)} />
+          </>}
+        />
+      </div>
+    );
+  }
+  return null;
+}
 
 function ToastBridge() {
   const store = useStore();
@@ -50,6 +102,7 @@ export function App() {
           style={{ '--panel-alpha': `${state.backgroundLevel}%` }}
         >
           <ResizeHandles />
+          {state.compact && <Notices onOpenSettings={openSettings} />}
           {state.compact ? <CompactView /> : (<>
           <TopBar onOpenSettings={openSettings} onClose={() => setConfirmClose(true)} />
           {missing.length > 0 && (
@@ -61,10 +114,15 @@ export function App() {
               />
             </div>
           )}
+          <Notices onOpenSettings={openSettings} />
           <Conversation onOpenSettings={openSettings} />
           </>)}
         </div>
-        <SettingsDrawer isOpen={settingsOpen} onOpenChange={setSettingsOpen} tab={settingsTab} onTabChange={setSettingsTab} />
+        {settingsOpen && (
+          <Suspense fallback={null}>
+            <SettingsDrawer isOpen={settingsOpen} onOpenChange={setSettingsOpen} tab={settingsTab} onTabChange={setSettingsTab} />
+          </Suspense>
+        )}
         <AlertDialog
           isOpen={confirmClose}
           onOpenChange={setConfirmClose}

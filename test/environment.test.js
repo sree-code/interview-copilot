@@ -34,3 +34,10 @@ test('saving settings keeps keys the Settings screen does not manage', () => {
   assert.equal(parsed.ASSEMBLY_AI_STREAM_PARAMS, 'a=1&b=two words');
   assert.equal(parsed.START_HIDDEN, 'false');
 });
+
+test('reads ASSEMBLY_AI_API_KEY and GEMINI_API_KEY from .env-style variables', () => {
+  const { normalizeApplicationEnvironment } = require('../src/bootstrap/environment');
+  const env = normalizeApplicationEnvironment({ ASSEMBLY_AI_API_KEY: ' aai ', GEMINI_API_KEY: 'g1,g2' });
+  assert.equal(env.assemblyAiApiKey, 'aai');
+  assert.deepEqual(env.geminiApiKeys, ['g1', 'g2']);
+});

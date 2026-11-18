@@ -169,7 +169,7 @@ function createAnswerEngine({
 
   // Called for every final transcript line. source: 'system' (interviewer)
   // or 'mic' (you). Returns a promise when an answer was started.
-  function onTranscriptFinal(source, text) {
+  function onTranscriptFinal(source, text, { autoAnswer = true } = {}) {
     const value = String(text || '').trim();
     if (!value) return null;
 
@@ -179,7 +179,7 @@ function createAnswerEngine({
     }
 
     stores.appendEvent('host', value);
-    if (!isFastMode()) return null;
+    if (!isFastMode() || !autoAnswer) return null;
 
     // An answer is streaming and the interviewer says something short and
     // non-question-like ("mm-hm", "right"): let the answer continue.

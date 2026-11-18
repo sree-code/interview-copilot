@@ -79,13 +79,15 @@ function parsePositiveInteger(value, defaultValue) {
 
 function normalizeApplicationEnvironment(source = {}) {
   const geminiApiKeys = normalizeGeminiApiKeys(
-    source.geminiApiKey ?? source.geminiApiKeys
+    source.geminiApiKey ?? source.geminiApiKeys ?? source.GEMINI_API_KEY
   );
 
   return {
     geminiApiKey: geminiApiKeys.join(','),
     geminiApiKeys,
-    assemblyAiApiKey: String(source.assemblyAiApiKey || '').trim(),
+    // .env uses ASSEMBLY_AI_API_KEY; without this it was read as empty and
+    // then blanked in process.env by syncProcessEnvironment.
+    assemblyAiApiKey: String(source.assemblyAiApiKey || source.ASSEMBLY_AI_API_KEY || '').trim(),
     hideFromScreenCapture: parseBoolean(
       source.HIDE_FROM_SCREEN_CAPTURE ?? source.hideFromScreenCapture,
       parseBoolean(OPTIONAL_ENV_DEFAULTS.HIDE_FROM_SCREEN_CAPTURE, true)

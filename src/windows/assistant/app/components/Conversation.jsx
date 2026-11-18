@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import {
   ChatLayout, ChatMessage, ChatMessageBubble, ChatMessageList, ChatSystemMessage
@@ -154,9 +154,19 @@ export function Conversation({ onOpenSettings }) {
   const streaming = state.messages.some((m) => m.streaming);
   const hasProfile = Boolean(state.interview?.profile?.resumeText || state.interview?.bank?.count);
   const empty = state.messages.length === 0 && !state.sources.system.partial && !state.sources.mic.partial;
+  const mainRef = useRef(null);
+
+  // Scroll shortcuts (Alt+Shift+Up/Down) scroll the conversation; the
+  // answer shortcuts (Alt+Shift+Left/Right) jump a screen at a time.
+  useEffect(() => {
+    const root = mainRef.current;
+    if (!root || !state.scrollRequest.dir) return;
+    const scroller = [root, ...root.querySelectorAll('*')].find((el) => el.scrollHeight > el.clientHeight + 4 && /(auto|scroll)/.test(getComputedStyle(el).overflowY));
+    if (scroller) scroller.scrollBy({ top: (state.scrollRequest.dir === 'up' ? -1 : 1) * scroller.clientHeight * 0.6, behavior: 'smooth' });
+  }, [state.scrollRequest.seq]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <main className="conversation">
+    <main className="conversation" ref={mainRef}>
       {state.busyText && <div className="busy-line"><Text size="sm" color="secondary">{state.busyText}</Text></div>}
       <ChatLayout
         density="compact"

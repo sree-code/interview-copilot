@@ -40,12 +40,25 @@ async function captureScreens(contents, dir) {
     await wait(150);
   }
   send('ai-stream-end', { actionId: 'autoAnswer', answerId: 'demo-2' });
+  send('vosk-final', { source: 'system', text: 'And how would it behave across regions?' });
+  await wait(300);
+  send('ai-stream-start', { actionId: 'autoAnswer', answerId: 'demo-3', label: 'Suggested answer' });
+  send('ai-stream-chunk', { actionId: 'autoAnswer', answerId: 'demo-3', text: "Each region keeps its own bucket and syncs counts every few seconds, so a user can't get double the limit by switching regions." });
+  send('ai-stream-end', { actionId: 'autoAnswer', answerId: 'demo-3' });
   await shot('conversation');
   await contents.executeJavaScript(`(() => { for (const el of document.querySelectorAll('.conversation *')) { if (el.scrollHeight > el.clientHeight + 20) { el.scrollTop = 0; } } })()`);
   await shot('conversation-top');
   await click('[aria-label="Dark mode"]');
   await shot('conversation-dark');
   await click('[aria-label="Light mode"]');
+  // Notices: a call started, and the one-time stats question.
+  send('meeting-detected', { app: 'zoom', label: 'Zoom' });
+  await shot('notice-meeting');
+  await contents.executeJavaScript('window.__copilotStore?.actions.dismissMeeting()');
+  await contents.executeJavaScript('window.__copilotStore?._debugSet({ telemetry: { configured: true, consent: null, askUser: true } })');
+  await shot('notice-consent');
+  await contents.executeJavaScript('window.__copilotStore?._debugSet({ telemetry: { configured: true, consent: true, askUser: false } })');
+  const scrollDrawer = () => contents.executeJavaScript(`(() => { for (const el of document.querySelectorAll('dialog *')) { if (el.scrollHeight > el.clientHeight + 40 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) { el.scrollTop = el.scrollHeight; return true; } } return false; })()`);
   if (await click('[aria-label="Settings"]')) {
     await shot('settings-ai');
     for (const tab of ['Interview', 'Window', 'Shortcuts', 'Diagnostics']) {
@@ -57,7 +70,14 @@ async function captureScreens(contents, dir) {
         return 'ok';
       })()`);
       if (found !== 'ok') console.log(`Tab ${tab} not clicked (${found})`);
+      await contents.executeJavaScript(`(() => { for (const el of document.querySelectorAll('dialog *')) el.scrollTop = 0; })()`);
       await shot(`settings-${tab.toLowerCase()}`);
+      const sections = { Interview: [['Job post link', 'job'], ['Key terms', 'terms']], Window: [['Click-through in compact mode', 'interview']] }[tab] || [];
+      for (const [text, name] of sections) {
+        const ok = await contents.executeJavaScript(`(() => { const el = [...document.querySelectorAll('dialog *')].filter((e) => e.textContent.trim().startsWith(${JSON.stringify(text)})).sort((x, y) => x.querySelectorAll('*').length - y.querySelectorAll('*').length)[0]; if (!el) return false; el.scrollIntoView({ block: 'start' }); return true; })()`);
+        if (ok) await shot(`settings-${tab.toLowerCase()}-${name}`);
+      }
+      if ((tab === 'Interview' || tab === 'Window') && await scrollDrawer()) await shot(`settings-${tab.toLowerCase()}-more`);
     }
     await contents.executeJavaScript(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
   }
@@ -69,6 +89,11 @@ async function captureScreens(contents, dir) {
   await shot('compact-see-through');
   await contents.executeJavaScript('window.__copilotStore?.actions.setBackgroundLevel(100)');
   await shot('compact');
+  await contents.executeJavaScript('window.__copilotStore?.actions.answerNav("previous")');
+  await shot('compact-pager');
+  await contents.executeJavaScript('window.__copilotStore?.actions.answerNav("next"); window.__copilotStore?.actions.zoomText("in"); window.__copilotStore?.actions.zoomText("in")');
+  await shot('compact-bigger-text');
+  await contents.executeJavaScript('window.__copilotStore?.actions.zoomText("reset")');
   await contents.executeJavaScript('window.__copilotStore?.actions.setCompact(false)');
 }
 

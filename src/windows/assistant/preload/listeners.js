@@ -101,6 +101,31 @@ function createEventActions(ipcRenderer) {
     label: 'onCompactModeChanged'
   });
 
+  const onTriggerScreenAi = createEventListener(ipcRenderer, {
+    channel: 'trigger-screen-ai',
+    label: 'onTriggerScreenAi'
+  });
+
+  const onAnswerNav = createEventListener(ipcRenderer, {
+    channel: 'answer-nav',
+    label: 'onAnswerNav'
+  });
+
+  const onTextZoom = createEventListener(ipcRenderer, {
+    channel: 'text-zoom',
+    label: 'onTextZoom'
+  });
+
+  const onMeetingDetected = createEventListener(ipcRenderer, {
+    channel: 'meeting-detected',
+    label: 'onMeetingDetected'
+  });
+
+  const onUpdateStatus = createEventListener(ipcRenderer, {
+    channel: 'update-status',
+    label: 'onUpdateStatus'
+  });
+
   const onMobileServerStatus = createEventListener(ipcRenderer, {
     channel: 'mobile-server-status',
     label: 'onMobileServerStatus'
@@ -133,6 +158,11 @@ function createEventActions(ipcRenderer) {
     onSttDebug: (callback) => rawOnSttDebug((data) => callback(data || {})),
     onMobileServerStatus,
     onCompactModeChanged,
+    onTriggerScreenAi,
+    onAnswerNav,
+    onTextZoom,
+    onMeetingDetected,
+    onUpdateStatus,
     onClearFromMobile
   };
 }

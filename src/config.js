@@ -105,25 +105,25 @@ const KEYBOARD_SHORTCUTS = [
     id: 'moveWindowLeft',
     buttonLabel: 'Move Window Left',
     description: 'Move window to left side',
-    accelerator: 'Alt+Shift+Left'
+    accelerator: 'CommandOrControl+Alt+Shift+Left'
   },
   {
     id: 'moveWindowRight',
     buttonLabel: 'Move Window Right',
     description: 'Move window to right side',
-    accelerator: 'Alt+Shift+Right'
+    accelerator: 'CommandOrControl+Alt+Shift+Right'
   },
   {
     id: 'moveWindowUp',
     buttonLabel: 'Move Window Up',
     description: 'Move window to top',
-    accelerator: 'Alt+Shift+Up'
+    accelerator: 'CommandOrControl+Alt+Shift+Up'
   },
   {
     id: 'moveWindowDown',
     buttonLabel: 'Move Window Down',
     description: 'Move window to bottom',
-    accelerator: 'Alt+Shift+Down'
+    accelerator: 'CommandOrControl+Alt+Shift+Down'
   },
   {
     id: 'toggleCompact',
@@ -136,6 +136,66 @@ const KEYBOARD_SHORTCUTS = [
     buttonLabel: 'Under Webcam',
     description: 'Move window to top center (under the webcam)',
     accelerator: 'Alt+Shift+W'
+  },
+  {
+    id: 'previousAnswer',
+    buttonLabel: 'Previous Answer',
+    description: 'Show the previous answer',
+    accelerator: 'Alt+Shift+Left'
+  },
+  {
+    id: 'nextAnswer',
+    buttonLabel: 'Next Answer',
+    description: 'Show the next answer (back to the latest)',
+    accelerator: 'Alt+Shift+Right'
+  },
+  {
+    id: 'scrollAnswerUp',
+    buttonLabel: 'Scroll Up',
+    description: 'Scroll the answer up',
+    accelerator: 'Alt+Shift+Up'
+  },
+  {
+    id: 'scrollAnswerDown',
+    buttonLabel: 'Scroll Down',
+    description: 'Scroll the answer down',
+    accelerator: 'Alt+Shift+Down'
+  },
+  {
+    id: 'textBigger',
+    buttonLabel: 'Bigger Text',
+    description: 'Make the text bigger',
+    accelerator: 'Alt+Shift+='
+  },
+  {
+    id: 'textSmaller',
+    buttonLabel: 'Smaller Text',
+    description: 'Make the text smaller',
+    accelerator: 'Alt+Shift+-'
+  },
+  {
+    id: 'textReset',
+    buttonLabel: 'Reset Text Size',
+    description: 'Reset the text size',
+    accelerator: 'Alt+Shift+0'
+  },
+  {
+    id: 'nextScreen',
+    buttonLabel: 'Next Screen',
+    description: 'Move the window to the next monitor',
+    accelerator: 'Alt+Shift+D'
+  },
+  {
+    id: 'callAskAi',
+    buttonLabel: 'Ask AI (call)',
+    description: 'Ask AI. Only while listening, and only if turned on in Settings',
+    accelerator: 'CommandOrControl+Enter'
+  },
+  {
+    id: 'callScreenAi',
+    buttonLabel: 'Screen AI (call)',
+    description: 'Screenshot + answer from it. Only while listening, and only if turned on in Settings',
+    accelerator: 'CommandOrControl+Shift+Enter'
   },
   {
     id: 'windowSizePreset1',

@@ -15,6 +15,9 @@ Use it only where recording, transcription, screenshots and AI assistance are al
 - **Mic echo removed.** When the interviewer's voice leaks from your speakers into the mic, the duplicate "You" line is dropped.
 - **New interface built with [Astryx](https://github.com/meta/astryx)** (Meta's open-source React design system): a compact top bar, a chat view where answers sit under the question they answer (labelled *Your prepared answer* or *Suggested answer*), a Settings drawer with tabs, dark mode and toasts. The previous interface is still available with `LEGACY_UI=1`. How everything fits together: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 - **Windows first, macOS too.** Windows 10/11 is the main target: an installer and a portable `.exe`, tested on every push by a Windows GitHub Actions job (unit tests, app start-up check, build). System audio uses Electron 45 loopback capture (WASAPI on Windows, CoreAudio tap on macOS 14.2+).
+- **Built for the call itself.** A compact strip under the webcam that clicks through to the meeting and never takes keyboard focus; flip between answers and scroll them with shortcuts; text size shortcuts; next-monitor; stays above full-screen Teams/Zoom on Windows; offers to listen when a call starts.
+- **Better transcription and answers.** Ask AI closes the interviewer's open sentence first (AssemblyAI ForceEndpoint); key terms from your resume and job description fix misheard tech names; 6 interview languages; screenshots go to a vision model as images; job details filled from a job post link.
+- **Auto-update** of the installed Windows app from GitHub Releases, locked-down Electron fuses, and optional, opt-in anonymous usage stats (see [what's sent](docs/HOW-IT-WORKS.md#usage-stats-opt-in)).
 - **Faster and safer.** No 6 s pause between requests; the conversation is sent once instead of three times; OCR runs in the background; screenshots are downscaled. The renderer is sandboxed with a Content-Security-Policy, TLS checks are back on, the phone companion needs a pairing token, and the app no longer disguises itself as Google Chrome.
 
 ### Setup
@@ -349,7 +352,9 @@ repomix-output.txt       Single-file repository snapshot for AI/code review tool
 
 ## Shortcuts
 
-All keyboard shortcuts are customizable. Configure them in `src/config.js` to match your preference before building or running the app.
+All keyboard shortcuts are customizable. Configure them in `src/config.js` to match your preference before building or running the app. The full list is in [WINDOWS_SETUP.md](WINDOWS_SETUP.md#shortcuts).
+
+For friends: [docs/FRIENDS-SETUP.md](docs/FRIENDS-SETUP.md) (also as a PDF) is a single guide you can give to Claude Code to install and set up everything.
 
 ## Scripts
 

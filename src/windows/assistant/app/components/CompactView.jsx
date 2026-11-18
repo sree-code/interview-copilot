@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { ToggleButton } from '@astryxdesign/core/ToggleButton';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
@@ -5,13 +6,14 @@ import { Markdown } from '@astryxdesign/core/Markdown';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Icon } from '@astryxdesign/core/Icon';
 import { Text } from '@astryxdesign/core/Text';
-import { ArrowUpToLine, Copy, Maximize2, Mic, Sparkles } from 'lucide-react';
+import { ArrowUpToLine, ChevronLeft, ChevronRight, Copy, Maximize2, Mic, Sparkles } from 'lucide-react';
 
 import { useSessionState, useStore } from '../useStore.js';
 import { listeningStatus } from './TopBar.jsx';
 
 // Answer-only strip for use during the interview: the interviewer's latest
-// line on top, the latest answer below in larger text. Nothing else.
+// line on top, one answer below in larger text (the latest, or an earlier
+// one picked with the pager: Alt+Shift+Left/Right). Nothing else.
 function latest(messages, type) {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i].type === type) return messages[i];
@@ -25,15 +27,75 @@ function answerLabel(label) {
   return label ? <Badge variant="blue" label={label} /> : null;
 }
 
+// Parts of the strip that take the mouse when click-through is on.
+const HIT_SELECTOR = '.compact-bar, .compact-pager, .resize-handle, [role="dialog"], [role="menu"], [role="tooltip"], [data-hit]';
+
+// Click-through: the window ignores the mouse (it goes to the meeting app
+// underneath) except while the pointer is over the bar and its buttons.
+// Electron keeps sending mousemove while ignoring, so we can switch back.
+function useClickThrough(enabled, setPassthrough) {
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let ignoring = null;
+    let last = 0;
+    let pending = null;
+    const apply = (ignore) => {
+      if (ignore === ignoring) return;
+      ignoring = ignore;
+      setPassthrough(ignore);
+    };
+    const onMove = (event) => {
+      const decide = () => apply(!event.target?.closest?.(HIT_SELECTOR));
+      const now = Date.now();
+      clearTimeout(pending);
+      if (now - last >= 40) { last = now; decide(); } else { pending = setTimeout(decide, 40); }
+    };
+    const onLeave = () => apply(true);
+    apply(true);
+    document.addEventListener('mousemove', onMove);
+    document.documentElement.addEventListener('mouseleave', onLeave);
+    return () => {
+      clearTimeout(pending);
+      document.removeEventListener('mousemove', onMove);
+      document.documentElement.removeEventListener('mouseleave', onLeave);
+      setPassthrough(false);
+    };
+  }, [enabled, setPassthrough]);
+}
+
 export function CompactView() {
   const { actions } = useStore();
   const state = useSessionState();
-  const { sources, messages, hasAssemblyKey, hasModelKey, inFlight } = state;
+  const { sources, messages, hasAssemblyKey, hasModelKey, inFlight, pagerIndex, scrollRequest, prefs } = state;
   const status = listeningStatus(sources);
   const listening = sources.system.active || sources.mic.active || status.variant === 'warning';
+  const answerRef = useRef(null);
 
-  const answer = latest(messages, 'ai-response');
-  const question = sources.system.partial || latest(messages, 'voice-system')?.content || '';
+  useClickThrough(prefs.clickThrough, actions.setMousePassthrough);
+
+  const answers = messages.filter((m) => m.type === 'ai-response');
+  const index = pagerIndex == null ? answers.length - 1 : Math.min(pagerIndex, answers.length - 1);
+  const answer = index >= 0 ? answers[index] : null;
+  const isLatest = pagerIndex == null || index === answers.length - 1;
+  const question = isLatest
+    ? (sources.system.partial || latest(messages, 'voice-system')?.content || '')
+    : (() => {
+      const position = messages.indexOf(answer);
+      for (let i = position - 1; i >= 0; i -= 1) if (messages[i].type === 'voice-system') return messages[i].content;
+      return '';
+    })();
+
+  // Scroll shortcuts (Alt+Shift+Up/Down).
+  useEffect(() => {
+    if (!scrollRequest.dir || !answerRef.current) return;
+    const el = answerRef.current;
+    el.scrollBy({ top: (scrollRequest.dir === 'up' ? -1 : 1) * Math.max(60, el.clientHeight * 0.6), behavior: 'smooth' });
+  }, [scrollRequest.seq]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A different answer starts at the top.
+  useEffect(() => {
+    if (answerRef.current) answerRef.current.scrollTop = 0;
+  }, [answer?.id]);
 
   return (
     <div className="compact">
@@ -44,6 +106,13 @@ export function CompactView() {
         </div>
         <div className="compact-buttons no-drag">
           {answer && answerLabel(answer.label)}
+          {answers.length > 1 && (
+            <div className="compact-pager">
+              <IconButton label="Previous answer" tooltip="Previous answer (Alt+Shift+Left)" icon={<Icon icon={ChevronLeft} />} variant="ghost" size="sm" isDisabled={index <= 0} onClick={() => actions.answerNav('previous')} />
+              <Text size="xs" color="secondary">{`${index + 1}/${answers.length}`}</Text>
+              <IconButton label="Next answer" tooltip="Next answer (Alt+Shift+Right)" icon={<Icon icon={ChevronRight} />} variant="ghost" size="sm" isDisabled={isLatest} onClick={() => actions.answerNav('next')} />
+            </div>
+          )}
           <ToggleButton
             label={listening ? 'Stop listening' : 'Listen'}
             icon={<Icon icon={Mic} />}
@@ -77,7 +146,7 @@ export function CompactView() {
           <IconButton label="Full view" tooltip="Full view (Alt+Shift+M)" icon={<Icon icon={Maximize2} />} variant="ghost" size="sm" onClick={() => actions.setCompact(false)} />
         </div>
       </div>
-      <div className="compact-answer">
+      <div className="compact-answer" ref={answerRef}>
         {answer?.content
           ? <Markdown density="compact" isStreaming={answer.streaming}>{answer.content}</Markdown>
           : <Text color="secondary">{answer?.streaming ? 'Writing…' : 'Answers will appear here.'}</Text>}

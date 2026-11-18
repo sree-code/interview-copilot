@@ -134,3 +134,44 @@ test('panel background level is clamped to 0-100', async () => {
   store.actions.setBackgroundLevel(-5);
   assert.equal(store.getState().backgroundLevel, 0);
 });
+
+test('answer pager flips through answers and returns to following the latest', async () => {
+  const api = fakeApi();
+  const store = await ready(api);
+  for (const id of ['a1', 'a2', 'a3']) {
+    api.emit('onAiStreamStart', { actionId: 'autoAnswer', answerId: id });
+    api.emit('onAiStreamEnd', { actionId: 'autoAnswer', answerId: id });
+  }
+  assert.equal(store.getState().pagerIndex, null);
+  store.actions.answerNav('previous');
+  assert.equal(store.getState().pagerIndex, 1);
+  store.actions.answerNav('previous');
+  store.actions.answerNav('previous');
+  assert.equal(store.getState().pagerIndex, 0);
+  store.actions.answerNav('next');
+  store.actions.answerNav('next');
+  assert.equal(store.getState().pagerIndex, null);
+  const seq = store.getState().scrollRequest.seq;
+  store.actions.answerNav('down');
+  assert.deepEqual(store.getState().scrollRequest, { dir: 'down', seq: seq + 1 });
+});
+
+test('text size steps and Ask AI closes an open interviewer turn first', async () => {
+  const calls = [];
+  const api = fakeApi({
+    setZoomFactor: async (f) => calls.push(['zoom', f]),
+    forceEndpoint: async (source) => { calls.push(['force', source]); return true; },
+    askAiWithSessionContext: async () => { calls.push(['ask']); return { success: true, text: 'ok' }; },
+    onAiStreamChunk: () => () => {}
+  });
+  const store = await ready(api);
+  store.actions.zoomText('in');
+  assert.equal(store.getState().prefs.textZoom, 1.1);
+  store.actions.zoomText('reset');
+  assert.equal(store.getState().prefs.textZoom, 1);
+  api.emit('onVoskStatus', { source: 'system', status: 'listening' });
+  api.emit('onVoskFinal', { source: 'system', text: 'Earlier line.' });
+  api.emit('onVoskPartial', { source: 'system', text: 'and how would you' });
+  await store.actions.askAi();
+  assert.deepEqual(calls.filter((c) => c[0] !== 'zoom'), [['force', 'system'], ['ask']]);
+});

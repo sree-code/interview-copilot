@@ -34,7 +34,7 @@
 1. **Interviewer:** `getDisplayMedia` answered by the main process with loopback audio. That's WASAPI on Windows, with no permission needed, and the CoreAudio tap on macOS 14.2+, which needs Screen & System Audio Recording. Video frames are dropped right away.
 2. **You:** `getUserMedia` microphone with echo cancellation.
 3. An AudioWorklet converts both to 16 kHz mono PCM and sends 100 ms chunks to the main process.
-4. The main process streams each source to AssemblyAI over its own WebSocket.
+4. The main process streams each source to AssemblyAI over its own WebSocket. The connection carries up to 100 **key terms** (Settings → Interview → Key terms, plus the company, the role and tech words found in your resume and job description) so names like *Kubernetes* or *gRPC* are spelled right; the **language** (non-English uses AssemblyAI's multilingual model); and, with **Answer timing: Faster**, a shorter end-of-turn silence for the interviewer.
 
 ## 3. Transcripts
 - **Partials** show as a "Live" line while someone is talking.
@@ -54,8 +54,8 @@ With fast mode off, nothing answers automatically. Use the buttons instead.
 ## 5. Buttons and shortcuts
 | Action | What it sends to the model |
 |---|---|
-| **Ask AI** (Alt+Shift+A) | The whole conversation (lines with the eye icon on) + enabled screenshots → best next answer |
-| **Screen** (Alt+Shift+E) | Screenshots (Alt+Shift+S) + text read from them (OCR) → answer to what's on screen, e.g. a coding problem |
+| **Ask AI** (Alt+Shift+A) | If the interviewer is mid-sentence, their turn is closed first (AssemblyAI `ForceEndpoint`, under a second) so their last words count. Then the whole conversation (lines with the eye icon on) + enabled screenshots → best next answer |
+| **Screen** (Alt+Shift+E) | Screenshots (Alt+Shift+S) sent **as images** to a vision model (Groq: `meta-llama/llama-4-scout-17b-16e-instruct`) plus the text read from them (OCR) → answer to what's on screen, e.g. a coding problem. If your key can't use the vision model, it answers from the OCR text. |
 | **Suggest** (Alt+Shift+G) | The transcript → what to say next |
 | ⋯ → Notes / Insights | The conversation → meeting notes / insights |
 | ⋯ → Answer the last question now | Forces the fast-mode answer for the latest question |
@@ -63,15 +63,48 @@ With fast mode off, nothing answers automatically. Use the buttons instead.
 | Hide (Alt+Shift+X) | Hides the window instantly |
 | Compact (Alt+Shift+M) | Small strip with only the interviewer's latest line and the latest answer, at the top center under the webcam |
 | Under webcam (Alt+Shift+W) | Moves the window to the top center of its screen |
+| Previous / next answer (Alt+Shift+Left / Right) | Compact mode shows one answer at a time; flip back to earlier ones. Next on the last one follows the latest again |
+| Scroll answer (Alt+Shift+Up / Down) | Scrolls the answer (or the conversation in full view) without touching the window |
+| Text size (Alt+Shift+= / - / 0) | Bigger, smaller, reset. Also Settings → Window → Text size |
+| Next screen (Alt+Shift+D) | Moves the window to the next monitor; screenshots are then taken of that monitor (Windows) |
+| Move window (Ctrl+Alt+Shift+Arrows) | Moves it to the left/right/top/bottom edge |
+| Ctrl+Enter / Ctrl+Shift+Enter | Ask AI / screenshot and answer. Off by default (Settings → Window); only registered while listening, so Ctrl+Enter still runs code in coding tools the rest of the time |
 | Settings → Window → Panel background | Fades only the background (text stays solid) so you can see the interviewer through it |
 
 The window is excluded from screen sharing (`setContentProtection`, on by default via `HIDE_FROM_SCREEN_CAPTURE=true`). On Windows 10 version 2004 and newer, and on Windows 11, it's left out of the capture entirely.
+
+**In compact mode** (both can be turned off in Settings → Window):
+- **Click-through:** clicks pass to the meeting app under the strip, except on its top bar and buttons. The page hit-tests mouse moves (every 40 ms) and tells the main process to ignore or accept the mouse (`setIgnoreMouseEvents(…, { forward: true })`).
+- **No focus stealing:** the window can't take keyboard focus (`setFocusable(false)`), so typing in the call or your editor is never interrupted. Buttons still work.
+
+On Windows the window uses the highest always-on-top level and re-applies it every second, so a full-screen Teams or Zoom window can't cover it.
+
+**Call detection:** on Windows, the app checks every 4 s which apps are using the microphone (the same data as Settings → Privacy → Microphone). When Zoom, Teams, Webex, Slack, Discord or a browser call starts and you're not listening, it offers to start. On macOS it notices Zoom meetings only.
+
+**Job post link** (Settings → Interview): fetches the page and fills company, role and job description from its schema.org `JobPosting` data (Greenhouse, Lever, LinkedIn public pages and most career sites), or from the page text.
+
+**Updates:** the installed Windows app checks GitHub Releases every few hours, downloads new versions in the background and installs them on restart. The portable .exe and runs from source update manually.
+
+## Usage stats (opt-in)
+If the build has a stats project key (`src/telemetry-config.json`), the app asks once whether to share anonymous usage and speed stats. Nothing is sent unless you say yes, and you can turn it off in Settings → Window → Privacy. `COPILOT_TELEMETRY=0` turns it off on a machine; it's always off in CI and smoke tests.
+
+| Sent | Never sent |
+|---|---|
+| Event names: app started/quit, listening started/stopped, answer shown, feature used, errors, crashes, updates, call detected | Transcripts, answers, prompts |
+| Timings: start-up, speech-end → transcript, question → first words of the answer (p50/p90 per session) | Your profile, resume, job description, Q&A |
+| Which answer source (prepared or model), model name, interrupted yes/no, answer length in characters | File names and paths |
+| App version, OS and version, CPU type, memory size, OS language, number of screens | API keys (long token-like strings are redacted even by accident) |
+| A random install id; country/city estimated by the stats service from your IP | Error message text (only a category such as `rate_limit` and the HTTP status) |
+
+The events go to the app owner's [PostHog](https://posthog.com) project (`/batch/` endpoint, sent every minute and on quit). The code is in `src/main-process/features/telemetry/`.
 
 ## 6. Where things are stored
 | What | Where |
 |---|---|
 | Keys, provider, model, opacity, theme | `cache/app-state.json` in dev; `%APPDATA%\Meeting Assistant\` (Windows) or `~/Library/Application Support/Meeting Assistant/` (macOS) when installed |
 | Profile, prepared Q&A, session history | `<that folder>/interview/` |
+| Install id and your stats choice | `<that folder>/telemetry.json` |
+| Window preferences (click-through, focus, text size, panel background) | The window's local storage |
 | Optional env settings | `.env` in the same folder (dev: project folder) |
 
 "Start a fresh session" (Settings → Interview) clears the session history but keeps your profile and Q&A.

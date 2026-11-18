@@ -87,7 +87,9 @@ If no interviewer text appears: make sure sound plays through your **default** o
 2. **Compact mode:** press **Alt+Shift+M** (or the shrink icon in the top bar). The window becomes a small strip at the top center of the screen, right under the webcam. It shows only the interviewer's latest line and the latest answer, in larger text. Reading there looks like eye contact. Press **Alt+Shift+M** again for the full view.
 3. **See-through background:** Settings → **Window** → **Panel background**. Around 30–50% lets you see the interviewer's video through the window while the text stays solid.
 4. **In the meeting app,** use speaker view and put the interviewer's video right below the strip, near the top center of the screen.
-5. Drag the strip by its top line to move it. Drag its edges to resize it. **Alt+Shift+W** puts it back under the webcam.
+5. Drag the strip by its top line to move it. Drag its edges to resize it. **Alt+Shift+W** puts it back under the webcam. **Alt+Shift+D** moves it to your other monitor.
+6. In compact mode the strip **lets clicks through** to the meeting (except on its top bar and buttons) and **never takes keyboard focus**, so typing in the call or your code editor isn't interrupted. **Alt+Shift+Left/Right** flips between answers, **Alt+Shift+Up/Down** scrolls the answer, **Alt+Shift+=** / **Alt+Shift+-** change the text size.
+7. When Zoom, Teams, Meet (in your browser), Webex, Slack or Discord starts using your microphone, the app offers to start listening.
 
 ---
 
@@ -103,7 +105,12 @@ If no interviewer text appears: make sure sound plays through your **default** o
 | Alt+Shift+H | Show / hide window |
 | Alt+Shift+M | Compact mode (latest answer only) on / off |
 | Alt+Shift+W | Move window to top center, under the webcam |
-| Alt+Shift+Arrows | Move window |
+| Alt+Shift+Left / Right | Previous / next answer |
+| Alt+Shift+Up / Down | Scroll the answer |
+| Alt+Shift+= / - / 0 | Text bigger / smaller / reset |
+| Alt+Shift+D | Move window to the next monitor |
+| Ctrl+Alt+Shift+Arrows | Move window to an edge |
+| Ctrl+Enter / Ctrl+Shift+Enter | Ask AI / screenshot and answer. Off by default (Settings → Window), only while listening |
 | Alt+Shift+1…4 | Window size presets |
 | Alt+Shift+C | Clear chat |
 
@@ -113,5 +120,5 @@ If you have more than one keyboard language, `Alt+Shift` may also switch languag
 
 ## Updating
 
-- **Option A:** download the newest build (steps 2–6) and run the installer again. Your settings stay.
+- **Option A:** the installed app updates itself from GitHub Releases: it downloads new versions in the background and shows "Version x is ready → Restart now". The portable .exe doesn't update itself: download the new one from the Releases page.
 - **Option B:** in the `interview-copilot` folder run `git pull`, `npm ci`, then `npm start`.

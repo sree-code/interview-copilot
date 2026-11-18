@@ -29,7 +29,8 @@ function registerSettingsIpc({
       geminiApiKey,
       assemblyAiApiKey,
       hasGeminiApiKeys: geminiApiKey.split(',').map((value) => value.trim()).filter(Boolean).length > 0,
-      hasAssemblyAiApiKey: assemblyAiApiKey.length > 0,
+      // A key in .env counts too (the form only shows keys saved in Settings).
+      hasAssemblyAiApiKey: assemblyAiApiKey.length > 0 || Boolean(String(process.env.ASSEMBLY_AI_API_KEY || '').trim()),
       geminiModel: geminiRuntime.getActiveGeminiModel(),
       geminiModels: geminiRuntime.getGeminiModels(),
       defaultGeminiModel: geminiRuntime.getDefaultGeminiModel(),

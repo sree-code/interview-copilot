@@ -104,3 +104,7 @@ html, body, #app { height: 100%; margin: 0; background: transparent; overflow: h
   font-size: 1.12em;
   line-height: 1.5;
 }
+
+.compact-pager { display: flex; align-items: center; gap: 0; }
+.notice-row { padding: 6px 10px 0; }
+.compact .notice-row { padding: 4px 8px 0; }

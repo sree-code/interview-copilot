@@ -32,6 +32,13 @@ function createWindowController({
   let compactBounds = null;
   const COMPACT_MIN_WIDTH = 320;
   const COMPACT_MIN_HEIGHT = 120;
+  // In compact mode the window doesn't take keyboard focus, so typing in
+  // the meeting or your editor is never interrupted (setting, default on).
+  let noFocusWhenCompact = true;
+  let ignoringMouse = false;
+  let onTopTimer = null;
+  let callShortcutsActive = false;
+  const CALL_SHORTCUTS = ['callAskAi', 'callScreenAi'];
 
   const RECOVERY_RELOAD_COOLDOWN_MS = 5000;
 
@@ -183,6 +190,103 @@ function createWindowController({
     });
   }
 
+  // Windows: full-screen Teams/Zoom windows can end up above an always-on-top
+  // window. Use the highest level and re-assert it every second.
+  function startOnTopKeeper() {
+    if (process.platform !== 'win32' || onTopTimer) return;
+    const apply = () => {
+      if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
+      try { mainWindow.setAlwaysOnTop(true, 'screen-saver', 1); } catch (_) { /* ignore */ }
+    };
+    apply();
+    onTopTimer = setInterval(apply, 1000);
+    onTopTimer.unref?.();
+  }
+
+  function stopOnTopKeeper() {
+    if (onTopTimer) clearInterval(onTopTimer);
+    onTopTimer = null;
+  }
+
+  function applyFocusPolicy() {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const focusable = !(compactMode && noFocusWhenCompact);
+    try {
+      mainWindow.setFocusable(focusable);
+      if (!focusable && mainWindow.isFocused()) mainWindow.blur();
+    } catch (_) { /* not supported on this platform */ }
+  }
+
+  function setInterviewWindowOptions({ noFocus } = {}) {
+    if (typeof noFocus === 'boolean') noFocusWhenCompact = noFocus;
+    applyFocusPolicy();
+    return { noFocus: noFocusWhenCompact };
+  }
+
+  // Click-through: the window ignores the mouse (clicks reach the meeting
+  // app under it) except while the pointer is over its buttons. The window
+  // decides by hit-testing mousemove events, which are still forwarded.
+  function setMousePassthrough(ignore) {
+    if (!mainWindow || mainWindow.isDestroyed()) return { ignoring: false };
+    const next = Boolean(ignore) && compactMode;
+    if (next !== ignoringMouse) {
+      ignoringMouse = next;
+      mainWindow.setIgnoreMouseEvents(next, { forward: true });
+    }
+    return { ignoring: ignoringMouse };
+  }
+
+  // Next monitor, keeping the same relative spot (compact: under its webcam).
+  function moveToNextDisplay() {
+    if (!mainWindow || mainWindow.isDestroyed()) return { error: 'Main window not available' };
+    const displays = screen.getAllDisplays().sort((a, b) => (a.bounds.x - b.bounds.x) || (a.bounds.y - b.bounds.y));
+    if (displays.length < 2) return { displays: displays.length };
+    const bounds = mainWindow.getBounds();
+    const current = screen.getDisplayMatching(bounds);
+    const index = displays.findIndex((d) => d.id === current.id);
+    const from = current.workArea;
+    const to = displays[(index + 1) % displays.length].workArea;
+    const width = Math.min(bounds.width, to.width);
+    const height = Math.min(bounds.height, to.height);
+    const relX = (bounds.x - from.x) / Math.max(1, from.width - bounds.width);
+    const relY = (bounds.y - from.y) / Math.max(1, from.height - bounds.height);
+    mainWindow.setBounds({
+      x: Math.round(to.x + clamp(relX, 0, 1) * (to.width - width)),
+      y: Math.round(to.y + clamp(relY, 0, 1) * (to.height - height)),
+      width,
+      height
+    }, false);
+    if (compactMode) moveToTopCenter();
+    return { ...mainWindow.getBounds(), displays: displays.length };
+  }
+
+  function setZoomFactor(factor) {
+    if (!mainWindow || mainWindow.isDestroyed()) return { error: 'Main window not available' };
+    const value = clamp(Number(factor) || 1, 0.7, 1.8);
+    mainWindow.webContents.setZoomFactor(value);
+    return { zoom: value };
+  }
+
+  // Ctrl+Enter style shortcuts are registered only while listening, so
+  // they don't take those keys away from other apps the rest of the time.
+  function setCallShortcuts(active) {
+    const next = Boolean(active);
+    if (next === callShortcutsActive) return { active: callShortcutsActive };
+    for (const id of CALL_SHORTCUTS) {
+      const accelerator = getKeyboardShortcutAccelerator(id);
+      if (next) {
+        const ok = globalShortcut.register(accelerator, () => {
+          sendToRenderer(id === 'callAskAi' ? 'trigger-ask-ai' : 'trigger-screen-ai');
+        });
+        if (!ok) console.warn(`Failed to register shortcut "${id}" (${accelerator})`);
+      } else if (globalShortcut.isRegistered(accelerator)) {
+        globalShortcut.unregister(accelerator);
+      }
+    }
+    callShortcutsActive = next;
+    return { active: callShortcutsActive };
+  }
+
   function createWindow({ launchHidden = false } = {}) {
     const appEnvironment = getAppEnvironment();
     mainWindow = createAssistantWindow({
@@ -199,6 +303,12 @@ function createWindowController({
     });
 
     attachWindowRecoveryHandlers();
+    startOnTopKeeper();
+    mainWindow.webContents.on('render-process-gone', () => {
+      // A crashed page can't un-ignore the mouse; never leave it unclickable.
+      ignoringMouse = false;
+      try { mainWindow.setIgnoreMouseEvents(false); } catch (_) { /* ignore */ }
+    });
     isVisible = !launchHidden;
     return mainWindow;
   }
@@ -380,14 +490,23 @@ function createWindowController({
     } else {
       compactBounds = mainWindow.getBounds();
       compactMode = false;
+      setMousePassthroughOff();
       mainWindow.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT);
       if (normalBounds) {
         mainWindow.setBounds(getSafeWindowBounds(normalBounds), false);
       }
     }
 
+    applyFocusPolicy();
     sendToRenderer('compact-mode-changed', compactMode);
     return { compact: compactMode };
+  }
+
+  function setMousePassthroughOff() {
+    if (ignoringMouse && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setIgnoreMouseEvents(false);
+    }
+    ignoringMouse = false;
   }
 
   function isCompactMode() {
@@ -504,6 +623,15 @@ function createWindowController({
       moveToTopCenter();
     });
 
+    registerShortcut('previousAnswer', () => sendToRenderer('answer-nav', 'previous'));
+    registerShortcut('nextAnswer', () => sendToRenderer('answer-nav', 'next'));
+    registerShortcut('scrollAnswerUp', () => sendToRenderer('answer-nav', 'up'));
+    registerShortcut('scrollAnswerDown', () => sendToRenderer('answer-nav', 'down'));
+    registerShortcut('textBigger', () => sendToRenderer('text-zoom', 'in'));
+    registerShortcut('textSmaller', () => sendToRenderer('text-zoom', 'out'));
+    registerShortcut('textReset', () => sendToRenderer('text-zoom', 'reset'));
+    registerShortcut('nextScreen', () => moveToNextDisplay());
+
     registerShortcut('windowSizePreset1', () => {
       setWindowSizePreset(1);
     });
@@ -522,6 +650,7 @@ function createWindowController({
   }
 
   function unregisterShortcuts() {
+    callShortcutsActive = false;
     globalShortcut.unregisterAll();
   }
 
@@ -531,6 +660,7 @@ function createWindowController({
       autoHideTimer = null;
     }
 
+    stopOnTopKeeper();
     if (!mainWindow || mainWindow.isDestroyed()) {
       return;
     }
@@ -563,7 +693,12 @@ function createWindowController({
     getWindowOpacityLevel,
     hasWindow,
     isCompactMode,
+    moveToNextDisplay,
     moveToTopCenter,
+    setCallShortcuts,
+    setInterviewWindowOptions,
+    setMousePassthrough,
+    setZoomFactor,
     setCompactMode,
     markVisible,
     registerShortcuts,

@@ -14,7 +14,9 @@ function createAssemblyAiService({
   getSpeechModel,
   getGeminiService,
   sendToRenderer,
-  onFinalTranscript = null
+  onFinalTranscript = null,
+  // () => ({ keyterms: string[], speechModel?: string, turnParams?: {} })
+  getStreamOptions = () => ({})
 }) {
   let assemblyWsMic = null;
   let assemblyWsSystem = null;
@@ -22,6 +24,13 @@ function createAssemblyAiService({
   let isStreamingSystem = false;
 
   const sttChunkCounters = { mic: 0, system: 0 };
+  // Words heard but not yet closed as a turn, and callers waiting for the
+  // turn to close (ForceEndpoint on Ask AI).
+  const openPartial = { mic: '', system: '' };
+  const endpointWaiters = { mic: [], system: [] };
+  const forcedTurn = { mic: false, system: false };
+  // Time the last partial arrived, to measure speech-end -> final latency.
+  const lastPartialAt = { mic: 0, system: 0 };
 
   // Interviewer audio leaking from speakers into the mic shows up as a
   // duplicate "You" line; drop those (see echo-suppressor.js).
@@ -70,6 +79,9 @@ function createAssemblyAiService({
 
   function resetSourceState(source) {
     const resolvedSource = normalizeSttSource(source);
+    openPartial[resolvedSource] = '';
+    forcedTurn[resolvedSource] = false;
+    resolveEndpointWaiters(resolvedSource, false);
     sttChunkCounters[resolvedSource] = 0;
     sttDroppedChunkCounters[resolvedSource] = 0;
     sttHistoryManager.resetSttHistoryBuffer(resolvedSource);
@@ -158,11 +170,23 @@ function createAssemblyAiService({
     }
 
     try {
+      const streamOptions = (typeof getStreamOptions === 'function' ? getStreamOptions(resolvedSource) : null) || {};
       const queryParams = new URLSearchParams({
         sample_rate: String(ASSEMBLY_AI_SAMPLE_RATE),
         format_turns: 'true',
-        speech_model: getSpeechModel()
+        speech_model: streamOptions.speechModel || getSpeechModel()
       });
+      // Names from your resume, the job description and your notes, so tech
+      // terms ("Kubernetes", "PostgreSQL") are heard correctly. Max 100.
+      const keyterms = Array.isArray(streamOptions.keyterms)
+        ? streamOptions.keyterms.map((term) => String(term || '').trim()).filter((term) => term && term.length <= 50).slice(0, 100)
+        : [];
+      if (keyterms.length) {
+        queryParams.set('keyterms_prompt', JSON.stringify(keyterms));
+      }
+      for (const [key, value] of Object.entries(streamOptions.turnParams || {})) {
+        if (value != null && value !== '') queryParams.set(key, String(value));
+      }
       // Optional extra streaming parameters, e.g. turn-detection tuning:
       // ASSEMBLY_AI_STREAM_PARAMS="mode=min_latency" (Universal-3 Pro models)
       // or "max_turn_silence=700". See AssemblyAI's turn-detection docs.
@@ -177,7 +201,7 @@ function createAssemblyAiService({
         source: resolvedSource,
         event: 'start-request',
         message: 'Opening AssemblyAI WebSocket',
-        meta: { speechModel: getSpeechModel() }
+        meta: { speechModel: queryParams.get('speech_model'), keyterms: keyterms.length }
       });
 
       sttChunkCounters[resolvedSource] = 0;
@@ -227,8 +251,17 @@ function createAssemblyAiService({
               break;
 
             case 'Turn':
+              if (msg.end_of_turn) {
+                openPartial[resolvedSource] = '';
+              } else if (msg.transcript) {
+                openPartial[resolvedSource] = msg.transcript;
+                lastPartialAt[resolvedSource] = Date.now();
+              }
               if (msg.transcript) {
                 if (msg.end_of_turn) {
+                  const forced = forcedTurn[resolvedSource];
+                  forcedTurn[resolvedSource] = false;
+                  const finalLatencyMs = lastPartialAt[resolvedSource] ? Date.now() - lastPartialAt[resolvedSource] : null;
                   console.log(`AssemblyAI final [${resolvedSource}]:`, msg.transcript);
                   emitSttDebug({
                     source: resolvedSource,
@@ -243,7 +276,7 @@ function createAssemblyAiService({
                     });
                     sttHistoryManager.queueSttHistorySegment(resolvedSource, text);
                     if (typeof onFinalTranscript === 'function') {
-                      onFinalTranscript(resolvedSource, text);
+                      onFinalTranscript(resolvedSource, text, { forced, finalLatencyMs });
                     }
                   };
                   if (resolvedSource === 'system') {
@@ -251,6 +284,7 @@ function createAssemblyAiService({
                   } else {
                     echoSuppressor.handleMicFinal(msg.transcript, emitFinal);
                   }
+                  resolveEndpointWaiters(resolvedSource, true);
                 } else {
                   if (resolvedSource === 'system') {
                     echoSuppressor.handleSystemPartial(msg.transcript);
@@ -348,6 +382,38 @@ function createAssemblyAiService({
       setSourceStreaming(resolvedSource, false);
       return { success: false, error: error.message };
     }
+  }
+
+  function resolveEndpointWaiters(source, closed) {
+    const waiters = endpointWaiters[source].splice(0);
+    waiters.forEach((resolve) => resolve(closed));
+  }
+
+  // Close the turn now instead of waiting for silence, so a manual answer
+  // includes the interviewer's last words. Resolves true once the final
+  // arrived, false when nothing was open or it took longer than timeoutMs.
+  function forceEndpoint(source = 'system', { timeoutMs = 900 } = {}) {
+    const resolvedSource = normalizeSttSource(source);
+    const ws = getSourceSocket(resolvedSource);
+    if (!ws || ws.readyState !== WebSocket.OPEN || !openPartial[resolvedSource]) {
+      return Promise.resolve(false);
+    }
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        endpointWaiters[resolvedSource] = endpointWaiters[resolvedSource].filter((fn) => fn !== done);
+        resolve(false);
+      }, timeoutMs);
+      const done = (closed) => { clearTimeout(timer); resolve(closed); };
+      endpointWaiters[resolvedSource].push(done);
+      try {
+        forcedTurn[resolvedSource] = true;
+        ws.send(JSON.stringify({ type: 'ForceEndpoint' }));
+        emitSttDebug({ source: resolvedSource, event: 'force-endpoint', message: 'Closed the open turn for a manual answer' });
+      } catch (error) {
+        forcedTurn[resolvedSource] = false;
+        done(false);
+      }
+    });
   }
 
   function handleAudioChunk({ source, data }) {
@@ -603,6 +669,8 @@ function createAssemblyAiService({
   return {
     dispose,
     emitSttDebug,
+    forceEndpoint,
+    isSourceStreaming,
     flushAllSttHistoryBuffers: sttHistoryManager.flushAllSttHistoryBuffers,
     getDesktopSources,
     handleAudioChunk,

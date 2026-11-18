@@ -102,7 +102,8 @@ function createAssistantWindow({
   } else if (process.platform === 'win32') {
     console.log('Applying Windows stealth settings');
     mainWindow.setSkipTaskbar(true);
-    mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
+    // Highest level; the window controller re-applies it every second.
+    mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
     mainWindow.setAppDetails({
       appId: 'SystemProcess',
       appIconPath: '',

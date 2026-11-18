@@ -4,6 +4,8 @@
 // prepared answers, earlier questions in this session and examples of how
 // you actually speak. Also decides when a prepared answer can be used as-is.
 
+const { LANGUAGES } = require('./stores');
+
 // Measured on rephrased vs unrelated questions (see test/qa-bank.test.js):
 // real rephrasings score >= 0.58, unrelated technical questions <= 0.25.
 const DIRECT_MATCH_THRESHOLD = 0.5;
@@ -75,7 +77,10 @@ function buildPersonalContext({ profile = {}, references = [], qaHistory = [], s
     .map((sample) => `"${sample.text}"`)
     .join('\n\n');
 
+  const language = profile.language && profile.language !== 'en' ? LANGUAGES[profile.language] : '';
+
   return [
+    language ? block('LANGUAGE', `The interview is in ${language}. Write every answer in ${language}.`) : '',
     block('CANDIDATE', who),
     block('RESUME', clip(profile.resumeText, LIMITS.resume)),
     block('JOB DESCRIPTION', clip(profile.jobDescription, LIMITS.jobDescription)),

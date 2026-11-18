@@ -1,6 +1,6 @@
 {
   "name": "meeting-assistant",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI meeting and mock-interview assistant overlay",
   "main": "src/main.js",
   "scripts": {
@@ -19,6 +19,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "dotenv": "^16.3.1",
+    "electron-updater": "6.8.10",
     "pdf-parse": "2.4.5",
     "screenshot-desktop": "^1.15.0",
     "tesseract.js": "^6.0.1",
@@ -89,6 +90,22 @@
       "oneClick": true,
       "perMachine": false,
       "artifactName": "MeetingAssistant-Setup-${version}.exe"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "sree-code",
+        "repo": "interview-copilot",
+        "releaseType": "release"
+      }
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
     }
   },
   "author": "Shubham",

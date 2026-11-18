@@ -2,6 +2,7 @@
 
 const { extractDocumentText } = require('./document-text');
 const { parseQaText } = require('./qa-bank');
+const { importJobFromUrl } = require('./job-url');
 
 const DOCUMENT_FILTERS = [{ name: 'Documents', extensions: ['pdf', 'txt', 'md'] }];
 
@@ -15,7 +16,7 @@ function summarizeSession(stores) {
   };
 }
 
-function registerInterviewIpc({ ipcMain, dialog, getMainWindow, stores, engine }) {
+function registerInterviewIpc({ ipcMain, dialog, getMainWindow, stores, engine, beforeManualAnswer = null, telemetry = null }) {
   async function pickDocument(title) {
     const result = await dialog.showOpenDialog(getMainWindow() || undefined, {
       title,
@@ -78,7 +79,20 @@ function registerInterviewIpc({ ipcMain, dialog, getMainWindow, stores, engine }
     return { success: true, session: summarizeSession(stores) };
   });
 
+  ipcMain.handle('interview-import-job-url', async (_event, url) => {
+    try {
+      const job = await importJobFromUrl(url);
+      telemetry?.track('feature_used', { feature: 'job_url_import', ok: true, kind: job.source });
+      return { success: true, ...job };
+    } catch (error) {
+      telemetry?.track('feature_used', { feature: 'job_url_import', ok: false });
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('interview-answer-last-question', async () => {
+    // Close the interviewer's open turn first, so their last words count.
+    if (typeof beforeManualAnswer === 'function') await beforeManualAnswer();
     const result = await engine.answerLastQuestion();
     return { success: !result.error, ...result };
   });

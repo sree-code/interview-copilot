@@ -16,8 +16,21 @@ const PROFILE_FIELDS = {
   targetRole: 200,
   jobDescription: 20000,
   resumeText: 30000,
-  notes: 5000
+  notes: 5000,
+  keyterms: 3000
 };
+
+// Transcription + answer language. Anything but English uses AssemblyAI's
+// multilingual model, which covers these languages.
+const LANGUAGES = {
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  it: 'Italian',
+  pt: 'Portuguese'
+};
+const ANSWER_TIMINGS = ['balanced', 'fast'];
 
 const DEFAULT_PROFILE = {
   name: '',
@@ -27,6 +40,9 @@ const DEFAULT_PROFILE = {
   jobDescription: '',
   resumeText: '',
   notes: '',
+  keyterms: '',
+  language: 'en',
+  answerTiming: 'balanced',
   fastMode: false
 };
 
@@ -38,6 +54,8 @@ function sanitizeProfile(input = {}) {
     }
   }
   profile.fastMode = Boolean(input.fastMode);
+  if (Object.hasOwn(LANGUAGES, input.language)) profile.language = input.language;
+  if (ANSWER_TIMINGS.includes(input.answerTiming)) profile.answerTiming = input.answerTiming;
   return profile;
 }
 
@@ -169,7 +187,9 @@ function createInterviewStores({ baseDir, maxSessionEvents = 2000 }) {
 }
 
 module.exports = {
+  ANSWER_TIMINGS,
   DEFAULT_PROFILE,
+  LANGUAGES,
   createInterviewStores,
   sanitizeProfile
 };

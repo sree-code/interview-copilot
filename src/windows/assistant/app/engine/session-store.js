@@ -38,6 +38,37 @@ function readBackgroundLevel() {
   }
 }
 
+// Per-machine window preferences (not part of the synced profile).
+const PREFS_KEY = 'copilot.prefs';
+export const DEFAULT_PREFS = {
+  clickThrough: true,     // compact mode: clicks pass through except on buttons
+  noFocus: true,          // compact mode: never take keyboard focus
+  callShortcuts: false,   // Ctrl+Enter / Ctrl+Shift+Enter while listening
+  meetingDetect: true,    // offer to start listening when a call starts
+  textZoom: 1
+};
+const ZOOM_STEPS = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5, 1.65, 1.8];
+
+export function clampZoom(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 1;
+  return Math.min(1.8, Math.max(0.8, Math.round(number * 100) / 100));
+}
+
+function readPrefs() {
+  try {
+    const saved = JSON.parse(globalThis.localStorage?.getItem(PREFS_KEY) || '{}');
+    const prefs = { ...DEFAULT_PREFS };
+    for (const key of Object.keys(DEFAULT_PREFS)) {
+      if (typeof saved[key] === typeof DEFAULT_PREFS[key]) prefs[key] = saved[key];
+    }
+    prefs.textZoom = clampZoom(prefs.textZoom);
+    return prefs;
+  } catch (_) {
+    return { ...DEFAULT_PREFS };
+  }
+}
+
 export const AI_ACTIONS = ['askAi', 'screenAi', 'suggest', 'notes', 'insights'];
 
 function emptySource(selected) {
@@ -62,7 +93,15 @@ export function createSessionStore(api = window.electronAPI) {
     hidden: false,
     theme: 'light',
     compact: false,
-    backgroundLevel: readBackgroundLevel()
+    backgroundLevel: readBackgroundLevel(),
+    prefs: readPrefs(),
+    // Compact view shows one answer; null = always the latest.
+    pagerIndex: null,
+    // Bumped by the scroll shortcuts; views scroll when it changes.
+    scrollRequest: { dir: null, seq: 0 },
+    telemetry: { configured: false, consent: null, askUser: false },
+    meeting: null,
+    update: { state: 'idle', version: null }
   };
 
   const listeners = new Set();
@@ -302,8 +341,17 @@ export function createSessionStore(api = window.electronAPI) {
     return false;
   }
 
+  // If the interviewer is mid-sentence, close their turn first so the
+  // answer includes their last words (AssemblyAI ForceEndpoint, <1 s).
+  // The main process returns at once when no turn is open.
+  async function closeOpenTurn() {
+    if (!api.forceEndpoint) return;
+    try { await api.forceEndpoint('system'); } catch (_) { /* answer anyway */ }
+  }
+
   async function askAi() {
     if (!requireModel()) return;
+    await closeOpenTurn();
     const bundle = contextBundle(true);
     if (!bundle.contextString && bundle.enabledScreenshotIds.length === 0) {
       toast('Nothing to answer yet: no transcript or screenshots.', 'error');
@@ -425,13 +473,88 @@ export function createSessionStore(api = window.electronAPI) {
   // ── Window layout ──
   async function setCompact(enabled) {
     const result = await api.setCompactMode?.(enabled);
-    if (result && typeof result.compact === 'boolean') set({ compact: result.compact });
+    if (result && typeof result.compact === 'boolean') set({ compact: result.compact, pagerIndex: null });
+    track('compact', { on: Boolean(enabled) });
   }
   function toggleCompact() {
     return setCompact(!state.compact);
   }
   async function moveTopCenter() {
     await api.moveWindowTopCenter?.();
+  }
+  function track(feature, props = {}) {
+    try { api.trackEvent?.('feature_used', { feature, ...props }); } catch (_) { /* ignore */ }
+  }
+  function setPref(name, value) {
+    if (!(name in DEFAULT_PREFS)) return;
+    const next = { ...state.prefs, [name]: name === 'textZoom' ? clampZoom(value) : value };
+    set({ prefs: next });
+    try { globalThis.localStorage?.setItem(PREFS_KEY, JSON.stringify(next)); } catch (_) { /* ignore */ }
+    applyPref(name, next);
+    if (name !== 'textZoom') api.trackEvent?.('setting_changed', { setting: name, value: Boolean(value) });
+  }
+  function applyPref(name, prefs = state.prefs) {
+    if (name === 'noFocus') api.setInterviewWindowOptions?.({ noFocus: prefs.noFocus });
+    if (name === 'textZoom') api.setZoomFactor?.(prefs.textZoom);
+    if (name === 'meetingDetect') api.setMeetingDetection?.(prefs.meetingDetect);
+    if (name === 'callShortcuts') syncCallShortcuts(true);
+  }
+  let callShortcutsOn = false;
+  function syncCallShortcuts(force = false) {
+    const want = Boolean(state.prefs.callShortcuts && (state.sources.system.active || state.sources.mic.active));
+    if (want === callShortcutsOn && !force) return;
+    callShortcutsOn = want;
+    api.setCallShortcuts?.(want);
+  }
+  function zoomText(direction) {
+    const current = state.prefs.textZoom;
+    let next = 1;
+    if (direction === 'in') next = ZOOM_STEPS.find((step) => step > current + 0.001) ?? ZOOM_STEPS[ZOOM_STEPS.length - 1];
+    else if (direction === 'out') next = [...ZOOM_STEPS].reverse().find((step) => step < current - 0.001) ?? ZOOM_STEPS[0];
+    setPref('textZoom', next);
+    track('text_zoom', { zoom: next });
+  }
+  function answerIds() {
+    return state.messages.filter((m) => m.type === 'ai-response').map((m) => m.id);
+  }
+  // previous / next answer, or scroll the shown answer up / down.
+  function answerNav(action) {
+    if (action === 'up' || action === 'down') {
+      set((s) => ({ scrollRequest: { dir: action, seq: s.scrollRequest.seq + 1 } }));
+      return;
+    }
+    const total = answerIds().length;
+    if (total === 0) return;
+    const current = state.pagerIndex ?? total - 1;
+    const next = action === 'previous' ? Math.max(0, current - 1) : Math.min(total - 1, current + 1);
+    set({ pagerIndex: next >= total - 1 ? null : next });
+    track('answer_pager', { direction: action });
+  }
+  async function nextScreen() {
+    const result = await api.moveToNextDisplay?.();
+    if (result?.displays === 1) toast('Only one screen connected.');
+    track('next_screen');
+  }
+  async function setTelemetryConsent(consent) {
+    const status = await api.telemetrySetConsent?.(Boolean(consent));
+    if (status && !status.error) set({ telemetry: status });
+  }
+  function dismissMeeting() {
+    set({ meeting: null });
+  }
+  async function startFromMeeting() {
+    set({ meeting: null });
+    track('meeting_prompt_start');
+    if (!anyActive()) await toggleTranscription();
+  }
+  async function installUpdate() {
+    const result = await api.installUpdate?.();
+    if (result && result.success === false) toast(result.error || 'Update not ready', 'error');
+  }
+  async function importJobUrl(url) {
+    const result = await api.importJobUrl?.(url);
+    if (!result?.success) throw new Error(result?.error || 'Import failed');
+    return result;
   }
   function setBackgroundLevel(level) {
     const value = clampBackgroundLevel(level);
@@ -470,6 +593,11 @@ export function createSessionStore(api = window.electronAPI) {
     const result = await api.interviewClearSession();
     if (result?.success) await reloadInterview();
   }
+  async function screenshotAndAnswer() {
+    await screenshot();
+    await screenAi();
+  }
+
   async function answerLastQuestion() {
     const result = await api.interviewAnswerLastQuestion?.();
     if (result && result.success === false) toast(result.error || 'No question to answer yet', 'error');
@@ -543,7 +671,14 @@ export function createSessionStore(api = window.electronAPI) {
       log('info', 'stopped-event', 'Stop acknowledged', source);
     });
     api.onToggleVoiceRecognition?.(() => toggleTranscription().catch((error) => log('error', 'shortcut-toggle-failed', error.message)));
-    api.onCompactModeChanged?.((compact) => set({ compact: Boolean(compact) }));
+    api.onCompactModeChanged?.((compact) => set({ compact: Boolean(compact), pagerIndex: null }));
+    api.onTriggerScreenAi?.(() => screenshotAndAnswer().catch((error) => log('error', 'shortcut-screen-ai-failed', error.message)));
+    api.onAnswerNav?.((action) => answerNav(String(action || '')));
+    api.onTextZoom?.((direction) => zoomText(String(direction || '')));
+    api.onMeetingDetected?.((data) => {
+      if (!anyActive() && data?.label) set({ meeting: { app: data.app, label: data.label } });
+    });
+    api.onUpdateStatus?.((data) => set({ update: { ...state.update, ...(data || {}) } }));
     api.onTriggerAskAi?.(() => askAi().catch((error) => log('error', 'shortcut-ask-ai-failed', error.message)));
     api.onSttDebug?.((data) => log(data?.level || 'info', data?.event || 'stt-debug', data?.message || '', data?.source || null, data?.meta || null, data?.ts || Date.now()));
 
@@ -596,6 +731,18 @@ export function createSessionStore(api = window.electronAPI) {
     } catch (error) {
       log('error', 'interview-load-failed', error.message);
     }
+    for (const name of ['noFocus', 'meetingDetect']) applyPref(name);
+    if (state.prefs.textZoom !== 1) applyPref('textZoom');
+    // Ctrl+Enter shortcuts follow the listening state.
+    subscribe(() => syncCallShortcuts());
+    try {
+      const status = await api.telemetryGetStatus?.();
+      if (status) set({ telemetry: status });
+    } catch (_) { /* ignore */ }
+    try {
+      const update = await api.getUpdateStatus?.();
+      if (update) set({ update });
+    } catch (_) { /* ignore */ }
     set({ ready: true });
     log('info', 'init', 'Renderer initialized');
     console.log('Renderer initialized - Ready for live transcription!');
@@ -606,6 +753,8 @@ export function createSessionStore(api = window.electronAPI) {
     subscribe,
     onToast,
     init,
+    // Lets the smoke test show states it can't trigger (e.g. the consent notice).
+    _debugSet: set,
     contextBundle,
     actions: {
       toggleTranscription,
@@ -628,6 +777,18 @@ export function createSessionStore(api = window.electronAPI) {
       toggleCompact,
       moveTopCenter,
       setBackgroundLevel,
+      setPref,
+      zoomText,
+      answerNav,
+      nextScreen,
+      screenshotAndAnswer,
+      setTelemetryConsent,
+      dismissMeeting,
+      startFromMeeting,
+      installUpdate,
+      importJobUrl,
+      track,
+      setMousePassthrough: (ignore) => api.setMousePassthrough?.(ignore),
       saveProfile,
       importText,
       importQa,

@@ -143,6 +143,87 @@ function createInvokeActions(ipcRenderer) {
       fallback: (error) => ({ error: error.message })
     }),
 
+setInterviewWindowOptions: invokeWithFallback(ipcRenderer, {
+      channel: 'set-interview-window-options',
+      label: 'setInterviewWindowOptions',
+      fallback: (error) => ({ error: error.message })
+    }),
+
+    moveToNextDisplay: invokeWithFallback(ipcRenderer, {
+      channel: 'move-to-next-display',
+      label: 'moveToNextDisplay',
+      fallback: (error) => ({ error: error.message })
+    }),
+
+    setZoomFactor: invokeWithFallback(ipcRenderer, {
+      channel: 'set-zoom-factor',
+      label: 'setZoomFactor',
+      fallback: (error) => ({ error: error.message })
+    }),
+
+    setCallShortcuts: invokeWithFallback(ipcRenderer, {
+      channel: 'set-call-shortcuts',
+      label: 'setCallShortcuts',
+      fallback: (error) => ({ error: error.message })
+    }),
+
+    forceEndpoint: invokeWithFallback(ipcRenderer, {
+      channel: 'force-endpoint',
+      label: 'forceEndpoint',
+      fallback: () => false
+    }),
+
+    telemetryGetStatus: invokeWithFallback(ipcRenderer, {
+      channel: 'telemetry-get-status',
+      label: 'telemetryGetStatus',
+      fallback: () => ({ configured: false, consent: null, askUser: false })
+    }),
+
+    telemetrySetConsent: invokeWithFallback(ipcRenderer, {
+      channel: 'telemetry-set-consent',
+      label: 'telemetrySetConsent',
+      fallback: (error) => ({ error: error.message })
+    }),
+
+    importJobUrl: invokeWithFallback(ipcRenderer, {
+      channel: 'interview-import-job-url',
+      label: 'importJobUrl',
+      fallback: (error) => ({ success: false, error: error.message })
+    }),
+
+    getMeetingStatus: invokeWithFallback(ipcRenderer, {
+      channel: 'meeting-detect-get-status',
+      label: 'getMeetingStatus',
+      fallback: () => ({ apps: [] })
+    }),
+
+    setMeetingDetection: invokeWithFallback(ipcRenderer, {
+      channel: 'meeting-detect-set-enabled',
+      label: 'setMeetingDetection',
+      fallback: (error) => ({ error: error.message })
+    }),
+
+    getUpdateStatus: invokeWithFallback(ipcRenderer, {
+      channel: 'update-get-status',
+      label: 'getUpdateStatus',
+      fallback: () => ({ state: 'idle' })
+    }),
+
+    installUpdate: invokeWithFallback(ipcRenderer, {
+      channel: 'update-install',
+      label: 'installUpdate',
+      fallback: (error) => ({ error: error.message })
+    }),
+
+    // Fire-and-forget, called on mousemove while click-through is on.
+    setMousePassthrough: (ignore) => {
+      ipcRenderer.send('set-mouse-passthrough', Boolean(ignore));
+    },
+
+    trackEvent: (event, props) => {
+      ipcRenderer.send('telemetry-track', { event, props });
+    },
+
     sendAudioChunk: (source, audioData) => {
       ipcRenderer.send('audio-chunk', { source, data: audioData });
     },

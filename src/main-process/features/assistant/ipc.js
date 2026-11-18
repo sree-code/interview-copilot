@@ -212,6 +212,26 @@ function registerAssistantIpc({
     return windowController.moveToTopCenter();
   });
 
+  ipcMain.on('set-mouse-passthrough', (_event, ignore) => {
+    windowController.setMousePassthrough(Boolean(ignore));
+  });
+
+  ipcMain.handle('set-interview-window-options', (_event, options = {}) => {
+    return windowController.setInterviewWindowOptions(options || {});
+  });
+
+  ipcMain.handle('move-to-next-display', () => windowController.moveToNextDisplay());
+
+  ipcMain.handle('set-zoom-factor', (_event, factor) => windowController.setZoomFactor(factor));
+
+  ipcMain.handle('set-call-shortcuts', (_event, active) => windowController.setCallShortcuts(Boolean(active)));
+
+  // Ask AI pressed while the interviewer is mid-sentence: close the turn now
+  // so the answer includes their last words (waits at most ~0.9 s).
+  ipcMain.handle('force-endpoint', async (_event, source = 'system') => {
+    return assemblyAiService.forceEndpoint?.(source === 'mic' ? 'mic' : 'system') ?? false;
+  });
+
   ipcMain.handle('set-window-size-preset', (_event, payload = {}) => {
     const preset = typeof payload === 'number' ? payload : payload?.preset;
     return windowController.setWindowSizePreset(preset);

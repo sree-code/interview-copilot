@@ -22,6 +22,9 @@ const OPENAI_COMPATIBLE_PRESETS = {
     defaultModel: 'openai/gpt-oss-20b',
     candidateModels: ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'llama-3.3-70b-versatile'],
     supportsVision: false,
+    // Screenshots go to this model as images (the main model is text-only).
+    // If the key can't use it, the answer falls back to the OCR text.
+    visionModel: 'meta-llama/llama-4-scout-17b-16e-instruct',
     envKey: 'GROQ_API_KEY'
   },
   openai: {
@@ -117,6 +120,9 @@ class OpenAICompatibleService extends OllamaService {
     this.apiKey = String(options.apiKey || '').trim();
     this.modelName = String(options.modelName || preset?.defaultModel || '').trim();
     this.supportsVision = options.supportsVision ?? preset?.supportsVision ?? false;
+    this.visionModel = this.supportsVision
+      ? null
+      : String(options.visionModel ?? process.env.FAST_LLM_VISION_MODEL ?? preset?.visionModel ?? '').trim() || null;
     this.extraBody = {
       ...defaultExtraBodyFor(this.modelName),
       ...(options.extraBody && typeof options.extraBody === 'object' ? options.extraBody : {})
@@ -156,7 +162,7 @@ class OpenAICompatibleService extends OllamaService {
         parts.push({ type: 'text', text: part });
       } else if (part?.text) {
         parts.push({ type: 'text', text: part.text });
-      } else if (part?.inlineData && this.supportsVision) {
+      } else if (part?.inlineData && this.canSeeImages()) {
         parts.push({
           type: 'image_url',
           image_url: { url: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}` }
@@ -166,12 +172,18 @@ class OpenAICompatibleService extends OllamaService {
     return parts.every((part) => part.type === 'text') ? parts.map((part) => part.text).join('\n') : parts;
   }
 
+  canSeeImages() {
+    return Boolean(this.supportsVision || this.visionModel);
+  }
+
   _requestBody(request, stream) {
+    const content = this._toContent(request.data);
+    const useVisionModel = Array.isArray(content) && !this.supportsVision && this.visionModel;
     const body = {
-      model: this.modelName,
-      messages: [{ role: 'user', content: this._toContent(request.data) }],
+      model: useVisionModel ? this.visionModel : this.modelName,
+      messages: [{ role: 'user', content }],
       stream,
-      ...this.extraBody
+      ...(useVisionModel ? {} : this.extraBody)
     };
     const maxTokens = request.maxOutputTokens || this.maxOutputTokens;
     if (maxTokens) {
@@ -262,15 +274,33 @@ class OpenAICompatibleService extends OllamaService {
       programmingLanguage: this.programmingLanguage,
       screenshotCount: imageParts.length
     });
-    const result = this.supportsVision
-      ? await this.generateMultimodal([{ text: prompt }, ...imageParts], options)
-      : await this.generateText(`${prompt}\n\n[The model can't see images; rely on the extracted screen text.]`, options);
+    const textOnly = () => this.generateText(`${prompt}\n\n[The model can't see images; rely on the extracted screen text.]`, options);
+    const result = this.canSeeImages()
+      ? await this._withImageFallback((onChunk) => this.generateMultimodal([{ text: prompt }, ...imageParts], { ...options, onChunk }), textOnly, options)
+      : await textOnly();
     this.addToHistory('assistant', `Screenshot analysis: ${result}`);
     return result;
   }
 
+  // Image request first; if the vision model fails before any text was
+  // streamed (not enabled for this key, rate limit...), answer from text.
+  async _withImageFallback(withImages, textOnly, options = {}) {
+    let streamed = false;
+    const onChunk = typeof options.onChunk === 'function'
+      ? (chunk) => { streamed = true; options.onChunk(chunk); }
+      : null;
+    try {
+      return await withImages(onChunk);
+    } catch (error) {
+      if (streamed || isAbortError(error) || options.signal?.aborted) throw error;
+      console.warn(`Vision request failed, using screen text instead: ${String(error?.message || error).slice(0, 160)}`);
+      this.lastVisionError = String(error?.message || error).slice(0, 160);
+      return textOnly();
+    }
+  }
+
   async askAiWithSessionContextAndScreenshots(imageParts, options = {}) {
-    if (!this.supportsVision) {
+    if (!this.canSeeImages()) {
       return this.askAiWithSessionContext({ ...options, screenshotCount: 0 });
     }
     const prompt = buildAskAiSessionPrompt({
@@ -282,7 +312,11 @@ class OpenAICompatibleService extends OllamaService {
       programmingLanguage: this.programmingLanguage,
       screenshotCount: options.screenshotCount || imageParts.length
     });
-    const result = await this.generateMultimodal([{ text: prompt }, ...imageParts], options);
+    const result = await this._withImageFallback(
+      (onChunk) => this.generateMultimodal([{ text: prompt }, ...imageParts], { ...options, onChunk }),
+      () => this.askAiWithSessionContext({ ...options, screenshotCount: 0 }),
+      options
+    );
     this.addToHistory('assistant', `Ask AI: ${result}`);
     return result;
   }
