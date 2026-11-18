@@ -9,11 +9,12 @@
     "dev": "node scripts/run-electron.js --enable-logging",
     "test": "node --test \"test/**/*.test.js\"",
     "build": "node scripts/run-build.js",
-    "build:win": "node scripts/run-build.js --win portable",
+    "build:win": "node scripts/run-build.js --win",
     "build:mac": "node scripts/run-build.js --mac",
     "build:linux": "node scripts/run-build.js --linux",
     "bench:llm": "node scripts/bench-llm.js",
-    "test:live": "node scripts/test-live-pipeline.js"
+    "test:live": "node scripts/test-live-pipeline.js",
+    "smoke": "node scripts/run-electron.js --smoke-test"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -55,6 +56,12 @@
     "win": {
       "target": [
         {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
           "target": "portable",
           "arch": [
             "x64"
@@ -70,6 +77,11 @@
     },
     "linux": {
       "target": "AppImage"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "MeetingAssistant-Setup-${version}.exe"
     }
   },
   "author": "Shubham",

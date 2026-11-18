@@ -4,7 +4,8 @@
 //
 //   npm run test:live
 //
-// 1. Generates a mock interview with macOS `say`: an interviewer track and a
+// 1. Generates a mock interview with text-to-speech (macOS `say` or
+//    Windows System.Speech): an interviewer track and a
 //    "mic" track containing the candidate's answers PLUS a quieter copy of
 //    the interviewer (speaker echo).
 // 2. Streams both tracks in real time through the app's own AssemblyAI
@@ -52,17 +53,36 @@ function requireEnv() {
     console.error(`Missing in .env: ${missing.join(', ')}`);
     process.exit(2);
   }
-  if (process.platform !== 'darwin') {
-    console.error('This test uses macOS `say` to generate speech.');
+  if (process.platform !== 'darwin' && process.platform !== 'win32') {
+    console.error('This test generates speech with macOS `say` or Windows System.Speech; run it on macOS or Windows.');
     process.exit(2);
   }
 }
 
-function synthesize(text, voice, dir, name) {
-  const aiff = path.join(dir, `${name}.aiff`);
+// Windows: the built-in System.Speech engine writes 16 kHz mono 16-bit WAV
+// directly. Text is passed through environment variables to avoid quoting.
+const WINDOWS_TTS = [
+  'Add-Type -AssemblyName System.Speech',
+  '$s = New-Object System.Speech.Synthesis.SpeechSynthesizer',
+  "try { $s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::$env:TTS_GENDER) } catch {}",
+  '$f = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)',
+  '$s.SetOutputToWaveFile($env:TTS_OUT, $f)',
+  '$s.Speak($env:TTS_TEXT)',
+  '$s.Dispose()'
+].join('; ');
+
+function synthesize(text, who, dir, name) {
   const wav = path.join(dir, `${name}.wav`);
-  execFileSync('say', ['-v', voice, '-o', aiff, text]);
-  execFileSync('afconvert', ['-f', 'WAVE', '-d', `LEI16@${SAMPLE_RATE}`, '-c', '1', aiff, wav]);
+  if (process.platform === 'win32') {
+    execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_TTS], {
+      env: { ...process.env, TTS_TEXT: text, TTS_OUT: wav, TTS_GENDER: who === 'host' ? 'Female' : 'Male' },
+      stdio: ['ignore', 'ignore', 'inherit']
+    });
+  } else {
+    const aiff = path.join(dir, `${name}.aiff`);
+    execFileSync('say', ['-v', who === 'host' ? 'Samantha' : 'Daniel', '-o', aiff, text]);
+    execFileSync('afconvert', ['-f', 'WAVE', '-d', `LEI16@${SAMPLE_RATE}`, '-c', '1', aiff, wav]);
+  }
   const buffer = fs.readFileSync(wav);
   const dataOffset = buffer.indexOf(Buffer.from('data')) + 8;
   return new Int16Array(buffer.buffer.slice(buffer.byteOffset + dataOffset, buffer.byteOffset + buffer.length));
@@ -81,7 +101,7 @@ function buildTracks(dir) {
   };
 
   SCRIPT.forEach((line, index) => {
-    const samples = synthesize(line.text, line.who === 'host' ? 'Samantha' : 'Daniel', dir, `line${index}`);
+    const samples = synthesize(line.text, line.who, dir, `line${index}`);
     if (line.who === 'host') {
       push(host, samples, cursor);
       // Speaker echo reaches the mic ~30 ms later, quieter.

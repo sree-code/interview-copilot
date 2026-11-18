@@ -31,10 +31,27 @@ function normalizeGeminiApiKeys(value) {
   return keys;
 }
 
+// Where the app reads and writes its .env.
+// Dev: the project folder. Packaged: the per-user data folder
+// (%APPDATA%\Meeting Assistant on Windows, ~/Library/Application Support/...
+// on macOS). Never the install folder: the Windows portable .exe unpacks to a
+// new temp folder on every launch, Program Files isn't writable, and writing
+// inside a macOS .app breaks its signature.
 function getEnvPath(app) {
   return app.isPackaged
-    ? path.join(process.resourcesPath, '.env')
+    ? path.join(app.getPath('userData'), '.env')
     : path.join(__dirname, '..', '..', '.env');
+}
+
+// Extra read-only places a packaged build also checks, so a .env placed next
+// to the portable .exe (or bundled in resources) still works. Earlier files
+// win; values already in the environment are never overridden.
+function getExtraEnvPaths(app) {
+  if (!app.isPackaged) return [];
+  return [
+    process.env.PORTABLE_EXECUTABLE_DIR && path.join(process.env.PORTABLE_EXECUTABLE_DIR, '.env'),
+    process.resourcesPath && path.join(process.resourcesPath, '.env')
+  ].filter(Boolean);
 }
 
 function parseBoolean(value, defaultValue) {
@@ -108,7 +125,9 @@ function validateRequiredEnvironment(environment, envPath) {
 
 function loadApplicationEnvironment(app) {
   const envPath = getEnvPath(app);
-  dotenv.config({ path: envPath });
+  for (const candidate of [envPath, ...getExtraEnvPaths(app)]) {
+    if (fs.existsSync(candidate)) dotenv.config({ path: candidate, quiet: true });
+  }
 
   const environment = normalizeApplicationEnvironment(process.env);
   syncProcessEnvironment(environment);
@@ -120,10 +139,24 @@ function loadApplicationEnvironment(app) {
   };
 }
 
-function buildEnvironmentFileContent(environment) {
+const MANAGED_ENV_KEYS = new Set([
+  'HIDE_FROM_SCREEN_CAPTURE', 'START_HIDDEN', 'MAX_SCREENSHOTS', 'SCREENSHOT_DELAY', 'NODE_ENV', 'NODE_OPTIONS'
+]);
+
+function formatEnvValue(value) {
+  const text = String(value ?? '');
+  return /[\s#"'\\]/.test(text) ? JSON.stringify(text) : text;
+}
+
+// Keys the Settings screen doesn't manage (GROQ_API_KEY, FAST_LLM_PRESET,
+// ASSEMBLY_AI_STREAM_PARAMS, ...) are kept when the file is rewritten.
+function buildEnvironmentFileContent(environment, preserved = {}) {
+  const extra = Object.entries(preserved).filter(([key]) => !MANAGED_ENV_KEYS.has(key));
   return [
-    '# API keys are managed in the in-app Settings UI and stored in app state.',
-    '# Do not place API keys in this file.',
+    ...(extra.length
+      ? ['# Your own settings (kept when the app saves this file)', ...extra.map(([key, value]) => `${key}=${formatEnvValue(value)}`), '']
+      : []),
+    '# Keys entered in the Settings screen are stored in app state, not here.',
     '',
     '# Optional capture behavior',
     '# true = hide this app from screen sharing/screen capture',
@@ -150,7 +183,14 @@ function saveApplicationEnvironment(app, values = {}) {
   const envPath = getEnvPath(app);
   const environment = normalizeApplicationEnvironment(values);
   syncProcessEnvironment(environment);
-  fs.writeFileSync(envPath, buildEnvironmentFileContent(environment), 'utf8');
+  let preserved = {};
+  try {
+    preserved = dotenv.parse(fs.readFileSync(envPath, 'utf8'));
+  } catch (_) {
+    // no existing file
+  }
+  fs.mkdirSync(path.dirname(envPath), { recursive: true });
+  fs.writeFileSync(envPath, buildEnvironmentFileContent(environment, preserved), { encoding: 'utf8', mode: 0o600 });
 
   return {
     envPath,

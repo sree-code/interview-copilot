@@ -13,7 +13,7 @@ Use it only where recording, transcription, screenshots and AI assistance are al
 - **Answers in your own words.** What you actually say after each question is collected and used as style examples, so suggestions match your vocabulary and sentence length. (No model fine-tuning: it's done with examples in the prompt.)
 - **Fast cloud models.** Any OpenAI-compatible API: Groq, OpenAI, Cerebras, OpenRouter, Gemini's OpenAI endpoint, or a custom URL. `npm run bench:llm` measures which model answers fastest with your keys.
 - **Mic echo removed.** When the interviewer's voice leaks from your speakers into the mic, the duplicate "You" line is dropped.
-- **macOS system audio.** Electron 45 with loopback capture (CoreAudio tap on macOS 14.2+).
+- **Windows first, macOS too.** Windows 10/11 is the main target: an installer and a portable `.exe`, tested on every push by a Windows GitHub Actions job (unit tests, app start-up check, build). System audio uses Electron 45 loopback capture (WASAPI on Windows, CoreAudio tap on macOS 14.2+).
 - **Faster and safer.** No 6 s pause between requests; the conversation is sent once instead of three times; OCR runs in the background; screenshots are downscaled. The renderer is sandboxed with a Content-Security-Policy, TLS checks are back on, the phone companion needs a pairing token, and the app no longer disguises itself as Google Chrome.
 
 ### Setup
@@ -28,7 +28,13 @@ Then open Settings:
 2. **AssemblyAI API Key:** for live transcription.
 3. **Interview profile:** fill in your details, import your resume and prepared Q&A, turn on **Fast mode**, and save.
 
-On macOS, allow the app (or Terminal, when using `npm start`) under **System Settings → Privacy & Security → Screen & System Audio Recording** and **Microphone**.
+**Windows (main setup):**
+- Easiest: download the installer from the latest [Windows build](../../actions/workflows/windows.yml) run (open the run → *Artifacts* → `meeting-assistant-windows`), or build it yourself with `npm run build:win`.
+- The app isn't code-signed, so SmartScreen may say "Windows protected your PC": click **More info → Run anyway**.
+- Allow the microphone under **Settings → Privacy & security → Microphone** ("Let desktop apps access your microphone").
+- System audio (the interviewer) needs no permission on Windows; it captures whatever plays on your default output device. Use headphones so your mic doesn't pick up the interviewer; if you use speakers, the echo filter drops the duplicate lines.
+
+**macOS:** allow the app (or Terminal, when using `npm start`) under **System Settings → Privacy & Security → Screen & System Audio Recording** and **Microphone**.
 
 ### Prepared Q&A file format
 
@@ -53,7 +59,8 @@ npm run bench:llm    # time-to-first-token for each model your keys can use
 npm run test:live    # end-to-end: generated interview audio -> AssemblyAI -> echo filter -> answers
 ```
 
-`bench:llm` and `test:live` read keys from `.env` (see `.env.example`).
+`bench:llm` and `test:live` read keys from `.env` (see `.env.example`). `test:live` generates speech with macOS `say` or the Windows built-in speech engine, so it runs on both.
+`npm run smoke` starts the app, checks the window and preload bridge loaded without errors, and exits (CI uses it on Windows).
 
 Measured on 2026-11-17 with free-tier keys (Groq + AssemblyAI) on a mock interview:
 
@@ -194,29 +201,11 @@ npm run dev
 npm run start:hidden
 ```
 
-### Recommended For Windows Use
+### Windows notes
 
-For day-to-day use on Windows, prefer building the portable app and running the generated `.exe` instead of launching from source every time.
-
-```powershell
-npm run build:win
-```
-
-This creates:
-
-```text
-dist/GoogleChrome.exe
-```
-
-You can then run the packaged app directly by double-clicking `dist/GoogleChrome.exe`.
-
-### Native Windows Build Tools
-
-This app depends on native modules. If `npm ci` fails with `node-gyp` or Visual Studio toolchain errors, install the C++ build tools and Python:
-
-```powershell
-winget install --id Microsoft.VisualStudio.2022.BuildTools --exact --accept-package-agreements --accept-source-agreements --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-```
+- `npm ci` needs no Visual Studio or Python: there are no native modules to compile.
+- Settings, keys, your profile, prepared Q&A and the interview session are stored in `%APPDATA%\Meeting Assistant`, so they survive updates and the portable `.exe` (which unpacks to a new temp folder on each launch).
+- Shortcuts use `Alt+Shift+<key>`. If you have more than one keyboard language installed, Windows may use `Alt+Shift` to switch languages; change that under **Settings → Time & language → Typing → Advanced keyboard settings → Input language hot keys**, or change the shortcuts in `src/config.js`.
 
 ## Configuration
 
@@ -244,9 +233,9 @@ The first item in each model/language list is treated as the default.
 
 ### Persisted Files
 
-- In development, state is written to `cache/app-state.json` at the repo root. Portable builds create the same `cache/app-state.json` structure next to the executable.
+- In development, state is written to `cache/app-state.json` at the repo root. Packaged builds write it under the user-data folder (`%APPDATA%\Meeting Assistant` on Windows, `~/Library/Application Support/Meeting Assistant` on macOS), together with `.env` and `interview/`.
 - Development screenshots are stored in `.stealth_screenshots/`. Packaged builds store screenshots under the app's user-data path.
-- Saving settings from the UI writes API-key values and selection state to `cache/app-state.json`.
+- Saving settings from the UI writes API-key values and selection state to `cache/app-state.json`. Saving also rewrites `.env`, keeping any of your own entries (e.g. `GROQ_API_KEY`, `FAST_LLM_PRESET`).
 
 ## Mobile Companion
 
@@ -366,56 +355,28 @@ All keyboard shortcuts are customizable. Configure them in `src/config.js` to ma
 - `npm start` runs the app from source.
 - `npm run start:hidden` launches it in background mode from source.
 - `npm run dev` enables Electron logging.
-- `npm run build:win` creates the portable Windows executable.
+- `npm run build:win` creates the Windows installer and portable executable.
+- `npm run smoke` starts the app, checks it loaded, and exits.
 - `npm run build` runs the default `electron-builder` flow.
 
 ## Build
-
-The recommended Windows build is the portable executable:
 
 ```powershell
 npm run build:win
 ```
 
-Expected output:
+Creates in `dist/`:
 
 ```text
-dist/GoogleChrome.exe
+MeetingAssistant-Setup-<version>.exe   installer (per-user, no admin rights, fastest start-up)
+MeetingAssistant-<version>.exe         portable (no install; slower start because it unpacks each launch)
 ```
 
-Notes:
+The same files are built on every push to `main` by `.github/workflows/windows.yml`; download them from the run's *Artifacts*. To also run the live AssemblyAI + Groq test there, add `ASSEMBLY_AI_API_KEY` and `GROQ_API_KEY` as repository secrets (Settings → Secrets and variables → Actions); without them that step is skipped.
 
-- This is the recommended way to use the app outside development because it gives you a standalone `.exe` to launch directly.
-- `.env` is bundled as an extra resource during packaging.
-- The current Windows build is configured as a portable `x64` target with:
-  - Product name: `Google Chrome (2)`
-  - Executable name: `GoogleChrome.exe`
-  - App ID: `com.google.chrome`
-  - Publisher name: `Google LLC`
-- If the build fails with a symlink privilege error, enable Windows Developer Mode or run the build from an elevated terminal.
-- The repo already includes [`assets/chrome.ico`](./assets/chrome.ico) for the Windows target. Add `assets/chrome.icns` and `assets/chrome.png` before relying on the macOS or Linux targets defined in `package.json`.
+To start hidden: `"MeetingAssistant-<version>.exe" --start-hidden`.
 
-### Running The Built App
-
-After building:
-
-1. Open the `dist/` folder.
-2. Run `GoogleChrome.exe`.
-3. If you want background launch behavior, either set `START_HIDDEN=true` before building or launch with:
-
-```powershell
-.\dist\GoogleChrome.exe --start-hidden
-```
-
-### Build Checks
-
-After packaging, verify:
-
-- `dist/GoogleChrome.exe` exists
-- the executable shows the Chrome icon
-- the app launches correctly without needing `npm start`
-
-For a build-focused walkthrough, see [`BUILD_INSTRUCTIONS.md`](./BUILD_INSTRUCTIONS.md).
+For macOS/Linux builds and identity details, see [`BUILD_INSTRUCTIONS.md`](./BUILD_INSTRUCTIONS.md).
 
 ## Good Practices
 

@@ -80,7 +80,12 @@ export function createAudioPipeline({ sendAudioChunk, addMonitorLog }) {
       return null;
     }
 
-    const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+    // Only the audio is used. The OS still captures the screen for the video
+    // track, so ask for the cheapest video possible to save CPU.
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      audio: true,
+      video: { frameRate: 1, width: 320, height: 180 }
+    });
     const audioTrack = stream.getAudioTracks()[0];
 
     if (!audioTrack) {
@@ -92,7 +97,8 @@ export function createAudioPipeline({ sendAudioChunk, addMonitorLog }) {
       stream.getTracks().forEach((track) => track.stop());
       throw new Error(
         'System audio permission is missing. On macOS allow it under System Settings > Privacy & Security > '
-        + 'Screen & System Audio Recording (for the app, or for Terminal/your IDE when running npm start), then restart.'
+        + 'Screen & System Audio Recording (for the app, or for Terminal/your IDE when running npm start), then restart. '
+        + 'On Windows check Settings > Privacy & security > Microphone and that an output device is active.'
       );
     }
 

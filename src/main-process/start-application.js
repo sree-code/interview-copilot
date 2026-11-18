@@ -365,6 +365,10 @@ async function startApplication() {
     windowController.createWindow({ launchHidden });
     windowController.registerShortcuts();
 
+    if (process.argv.includes('--smoke-test')) {
+      require('./smoke-test').runSmokeTest({ app, mainWindow: windowController.getMainWindow() });
+    }
+
     if (!launchHidden) {
       windowController.markVisible();
     }

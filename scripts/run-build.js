@@ -16,7 +16,7 @@ delete env.ELECTRON_RUN_AS_NODE;
 
 const platformArgs = (() => {
   switch (os.platform()) {
-    case 'win32':  return ['--win', 'portable'];
+    case 'win32':  return ['--win'];
     case 'darwin': return ['--mac'];
     case 'linux':  return ['--linux'];
     default:       return [];

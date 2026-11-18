@@ -1,0 +1,61 @@
+name: Windows build
+
+# Windows is the main machine for interviews, so every change is tested and
+# built on a real Windows runner. Download the installer from the run's
+# "Artifacts" section.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      ASSEMBLY_AI_API_KEY: ${{ secrets.ASSEMBLY_AI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Start the app and check it loads (smoke test)
+        run: npm run smoke
+
+      # Runs only if you add ASSEMBLY_AI_API_KEY and GROQ_API_KEY as
+      # repository secrets; otherwise skipped.
+      - name: Live pipeline test (real AssemblyAI + Groq, Windows speech)
+        if: ${{ env.ASSEMBLY_AI_API_KEY != '' && env.GROQ_API_KEY != '' }}
+        env:
+          FAST_LLM_PRESET: groq
+        run: npm run test:live
+
+      - name: Build installer and portable .exe
+        run: npm run build:win -- --publish never
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: meeting-assistant-windows
+          path: |
+            dist/*.exe
+          retention-days: 14
+          if-no-files-found: error

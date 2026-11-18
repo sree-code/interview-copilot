@@ -7,15 +7,15 @@ npm install
 npm run build
 ```
 
-`npm run build` picks your platform (`--win portable`, `--mac` or `--linux`) and writes the app to `dist/`. There are no native node modules to compile.
+`npm run build` picks your platform (`--win`, `--mac` or `--linux`) and writes the app to `dist/`. There are no native node modules to compile.
 
 A specific target from any host:
 
 ```bash
-npm run build:win     # dist/MeetingAssistant-<version>.exe (portable)
+npm run build:win     # dist/MeetingAssistant-Setup-<version>.exe (installer) + MeetingAssistant-<version>.exe (portable)
 npm run build:mac
 npm run build:linux   # AppImage
-npm run build -- --win nsis   # Windows installer instead of portable
+npm run build -- --win portable   # portable .exe only
 ```
 
 ## Identity

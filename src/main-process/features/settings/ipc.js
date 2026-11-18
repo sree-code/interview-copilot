@@ -97,14 +97,20 @@ function registerSettingsIpc({
       const nextProgrammingLanguage = geminiRuntime.setActiveProgrammingLanguage(settings.programmingLanguage);
       const nextWindowOpacityLevel = windowController.setWindowOpacityLevel(settings.windowOpacityLevel);
 
-      const updatedEnvironment = saveApplicationEnvironment(app, {
-        hideFromScreenCapture: appEnvironment.hideFromScreenCapture,
-        startHidden: appEnvironment.startHidden,
-        maxScreenshots: appEnvironment.maxScreenshots,
-        screenshotDelay: appEnvironment.screenshotDelay,
-        nodeEnv: appEnvironment.nodeEnv,
-        nodeOptions: appEnvironment.nodeOptions
-      });
+      // A failed .env write must not stop the settings below from saving.
+      let updatedEnvironment = appEnvironment;
+      try {
+        updatedEnvironment = saveApplicationEnvironment(app, {
+          hideFromScreenCapture: appEnvironment.hideFromScreenCapture,
+          startHidden: appEnvironment.startHidden,
+          maxScreenshots: appEnvironment.maxScreenshots,
+          screenshotDelay: appEnvironment.screenshotDelay,
+          nodeEnv: appEnvironment.nodeEnv,
+          nodeOptions: appEnvironment.nodeOptions
+        });
+      } catch (envError) {
+        console.warn('Could not write .env (settings still saved to app state):', envError.message);
+      }
 
       const keyState = geminiRuntime.setKeys(nextGeminiApiKey, 0);
       const updatedAppState = saveAppState(app, {
