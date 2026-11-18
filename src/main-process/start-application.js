@@ -68,6 +68,12 @@ async function startApplication() {
 
   const geminiRuntime = createGeminiRuntime();
   const telemetry = createTelemetry({ app, config: telemetryConfig });
+  let shortcutsRegistered = false;
+  const registerShortcutsOnce = () => {
+    if (shortcutsRegistered || !windowController) return;
+    shortcutsRegistered = true;
+    windowController.registerShortcuts();
+  };
   const telemetryObserver = createTelemetryObserver({
     telemetry,
     getModelInfo: () => {
@@ -288,7 +294,11 @@ async function startApplication() {
   ipcMain.handle('update-install', () => updater.installNow());
 
   ipcMain.handle('telemetry-get-status', () => telemetry.getStatus());
-  ipcMain.handle('telemetry-set-consent', (_event, consent) => telemetry.setConsent(consent));
+  ipcMain.handle('telemetry-set-consent', (_event, consent) => {
+    const status = telemetry.setConsent(consent);
+    if (!status.askUser) registerShortcutsOnce();
+    return status;
+  });
   // Feature use from the window. Only these names and only flag/number
   // properties are accepted.
   const RENDERER_EVENTS = new Set(['feature_used', 'setting_changed', 'ui_error']);
@@ -433,7 +443,9 @@ async function startApplication() {
     console.log('App is ready, creating window...');
     console.log(`Startup mode: ${launchHidden ? 'hidden' : 'visible'}`);
     windowController.createWindow({ launchHidden });
-    windowController.registerShortcuts();
+    // Beta: global shortcuts stay off until the stats are accepted, so the
+    // app can't be used around the accept screen.
+    if (!telemetry.getStatus().askUser) registerShortcutsOnce();
     windowController.getMainWindow()?.webContents.once('did-finish-load', () => {
       telemetry.track('app_started', {
         startup_ms: Math.round(process.uptime() * 1000),

@@ -55,9 +55,9 @@ async function captureScreens(contents, dir) {
   send('meeting-detected', { app: 'zoom', label: 'Zoom' });
   await shot('notice-meeting');
   await contents.executeJavaScript('window.__copilotStore?.actions.dismissMeeting()');
-  await contents.executeJavaScript('window.__copilotStore?._debugSet({ telemetry: { configured: true, consent: null, askUser: true } })');
-  await shot('notice-consent');
-  await contents.executeJavaScript('window.__copilotStore?._debugSet({ telemetry: { configured: true, consent: true, askUser: false } })');
+  await contents.executeJavaScript('window.__copilotStore?._debugSet({ telemetry: { configured: true, required: true, consent: null, askUser: true } })');
+  await shot('beta-accept');
+  await contents.executeJavaScript('window.__copilotStore?._debugSet({ telemetry: { configured: true, required: true, consent: true, askUser: false } })');
   const scrollDrawer = () => contents.executeJavaScript(`(() => { for (const el of document.querySelectorAll('dialog *')) { if (el.scrollHeight > el.clientHeight + 40 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) { el.scrollTop = el.scrollHeight; return true; } } return false; })()`);
   if (await click('[aria-label="Settings"]')) {
     await shot('settings-ai');

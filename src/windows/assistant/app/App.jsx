@@ -11,6 +11,7 @@ import { TopBar } from './components/TopBar.jsx';
 import { Conversation } from './components/Conversation.jsx';
 import { CompactView } from './components/CompactView.jsx';
 import { ResizeHandles } from './components/ResizeHandles.jsx';
+import { BetaGate } from './components/BetaGate.jsx';
 import { useLocalShortcuts } from './components/useLocalShortcuts.js';
 
 // Settings is the biggest part of the UI and isn't needed at startup.
@@ -48,7 +49,7 @@ function Notices({ onOpenSettings }) {
       </div>
     );
   }
-  if (state.telemetry?.askUser) {
+  if (state.telemetry?.askUser && !state.telemetry.required) {
     return (
       <div className="notice-row">
         <Banner
@@ -89,6 +90,7 @@ export function App() {
     setSettingsOpen(true);
   };
 
+  const gated = Boolean(state.telemetry?.required && state.telemetry?.askUser);
   const missing = [];
   if (state.ready && !state.hasAssemblyKey) missing.push('AssemblyAI key (transcription)');
   if (state.ready && !state.hasModelKey) missing.push('AI model key (answers)');
@@ -102,7 +104,8 @@ export function App() {
           style={{ '--panel-alpha': `${state.backgroundLevel}%` }}
         >
           <ResizeHandles />
-          {state.compact && <Notices onOpenSettings={openSettings} />}
+          {gated && <BetaGate />}
+          {!gated && state.compact && <Notices onOpenSettings={openSettings} />}
           {state.compact ? <CompactView /> : (<>
           <TopBar onOpenSettings={openSettings} onClose={() => setConfirmClose(true)} />
           {missing.length > 0 && (
@@ -118,7 +121,7 @@ export function App() {
           <Conversation onOpenSettings={openSettings} />
           </>)}
         </div>
-        {settingsOpen && (
+        {settingsOpen && !gated && (
           <Suspense fallback={null}>
             <SettingsDrawer isOpen={settingsOpen} onOpenChange={setSettingsOpen} tab={settingsTab} onTabChange={setSettingsTab} />
           </Suspense>

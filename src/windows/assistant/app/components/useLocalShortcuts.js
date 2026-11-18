@@ -20,6 +20,8 @@ export function useLocalShortcuts() {
   const store = useStore();
   useEffect(() => {
     const onKeyDown = (event) => {
+      const { telemetry } = store.getState();
+      if (telemetry?.required && telemetry?.askUser) return; // beta accept screen is up
       const shortcuts = store.getState().settings?.keyboardShortcuts || [];
       for (const shortcut of shortcuts) {
         const action = LOCAL[shortcut.id];

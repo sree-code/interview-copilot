@@ -85,8 +85,8 @@ On Windows the window uses the highest always-on-top level and re-applies it eve
 
 **Updates:** the installed Windows app checks GitHub Releases every few hours, downloads new versions in the background and installs them on restart. The portable .exe and runs from source update manually.
 
-## Usage stats (opt-in)
-If the build has a stats project key (`src/telemetry-config.json`), the app asks once whether to share anonymous usage and speed stats. Nothing is sent unless you say yes, and you can turn it off in Settings → Window → Privacy. `COPILOT_TELEMETRY=0` turns it off on a machine; it's always off in CI and smoke tests.
+## Usage stats (required in the beta)
+During the beta, sharing anonymous usage and speed stats is a condition of using the app. On first start the app shows what is and isn't sent, with **Accept and continue** or **Quit**. Nothing is sent until you accept, and the app (including its global shortcuts) stays locked until then. This is set by `"required": true` in `src/telemetry-config.json`; set it to `false` to make the stats optional again (ask once, with a switch in Settings → Window → Privacy). With no project key, stats are off for everyone. `COPILOT_TELEMETRY=0` turns them off on a developer machine; they're always off in CI and smoke tests.
 
 | Sent | Never sent |
 |---|---|
@@ -103,7 +103,7 @@ The events go to the app owner's [PostHog](https://posthog.com) project (`/batch
 |---|---|
 | Keys, provider, model, opacity, theme | `cache/app-state.json` in dev; `%APPDATA%\Meeting Assistant\` (Windows) or `~/Library/Application Support/Meeting Assistant/` (macOS) when installed |
 | Profile, prepared Q&A, session history | `<that folder>/interview/` |
-| Install id and your stats choice | `<that folder>/telemetry.json` |
+| Install id and whether you accepted the stats | `<that folder>/telemetry.json` |
 | Window preferences (click-through, focus, text size, panel background) | The window's local storage |
 | Optional env settings | `.env` in the same folder (dev: project folder) |
 

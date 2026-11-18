@@ -27,7 +27,7 @@ Copy both keys into a note for now. **Don't paste them into the Claude chat.** Y
 
    > Follow "Part 2: instructions for Claude" in this PDF to install the interview copilot on my computer. Ask me before installing anything.
 
-3. **Say yes** when Claude asks to install Git and Node.js, if you don't already have them. Claude downloads the app, checks it, and starts it. A small window titled *Meeting Assistant* appears at the top of your screen with a yellow banner saying keys are missing.
+3. **Say yes** when Claude asks to install Git and Node.js, if you don't already have them. Claude downloads the app, checks it, and starts it. A small window titled *Meeting Assistant* appears at the top of your screen. It opens on a **Welcome to the Interview Copilot beta** screen: read it and click **Accept and continue** (step 7 explains what it sends). Then you'll see a yellow banner saying keys are missing.
 4. **Add your keys in the app** (not in the chat): click **Open settings** on the yellow banner.
    - **AI & keys** tab: AI provider **Fast cloud model**, Service **Groq**, paste your Groq key, Model `openai/gpt-oss-20b`. Paste your AssemblyAI key below. Click **Save settings**.
 5. **Fill in your profile:** **Interview** tab.
@@ -37,7 +37,7 @@ Copy both keys into a note for now. **Don't paste them into the Claude chat.** Y
    - **Prepared Q&A:** if you have a file of your prepared answers (`Q:` and `A:` lines), click **Import Q&A file**. Claude can draft one from your resume if you ask (see Part 2, step 8).
    - Turn on **Answer automatically**, then click **Save profile**.
 6. **Allow the microphone** if asked. On Windows: **Settings → Privacy & security → Microphone**, turn on access for desktop apps. On a Mac: allow **Microphone** and **Screen & System Audio Recording** for the app when macOS asks, then restart it.
-7. A question may appear: *Share anonymous usage and speed stats?* It helps the author make the app faster. It never sends your transcripts, answers, profile or keys. Choose either option. You can change it later in Settings → Window → Privacy.
+7. **About the beta screen** from step 3: The beta sends anonymous usage and speed stats (timings, errors, features used, app version, OS, and your country and city estimated from your IP) so the author can fix and speed it up. It never sends what anyone says, your transcripts, answers, profile, resume, files, screenshots or keys. Click **Accept and continue** to use the app; it stays locked until you do (**Quit** closes it).
 
 ### Practice
 
@@ -96,7 +96,7 @@ npm test
 ```
 `npm ci` takes 2–5 minutes (it downloads Electron). All tests should pass. If `npm ci` fails behind a proxy or antivirus, retry once, then show the person the error.
 
-**5. Start the app:** `npm start`. Run it in the background or in a separate terminal, so you can keep talking with the person. The window appears at the top center of the screen. Tell the person to continue with Part 1, step 4 (keys in the app's Settings).
+**5. Start the app:** `npm start`. Run it in the background or in a separate terminal, so you can keep talking with the person. The window appears at the top center of the screen. It first shows a beta welcome screen; tell the person to read it and click **Accept and continue** (the app and its shortcuts stay locked until they do), then continue with Part 1, step 4 (keys in the app's Settings).
 
 Optional, Windows only: if the person wants a normal installed app (Start menu entry, automatic updates), run `npm run build:win`, then run `dist\MeetingAssistant-Setup-<version>.exe`. It installs for this user only, with no admin rights needed. Windows SmartScreen may say "Windows protected your PC": click **More info → Run anyway** (the app isn't code-signed). If the repository has a Releases page with an installer, downloading that is quicker.
 
@@ -126,6 +126,7 @@ Then tell them: Settings → Interview → **Import Q&A file** → choose that f
 
 | Symptom | Fix |
 |---|---|
+| Only the beta welcome screen shows, or shortcuts do nothing | Click **Accept and continue**. The beta needs the usage stats accepted |
 | Yellow banner "Add your … key" | Keys not saved: Settings → AI & keys → paste → **Save settings** |
 | "AssemblyAI: …" error | Wrong or expired AssemblyAI key, or no credit left on the account |
 | No interviewer text on Windows | Sound must play through the **default** output device (Settings → System → Sound → Output); restart the app |

@@ -1,5 +1,6 @@
 {
-  "_comment": "Usage and performance stats go to the app owner's PostHog project. The project key is a write-only ingest key (safe to publish). Leave projectKey empty to turn telemetry off for everyone. COPILOT_TELEMETRY=0 turns it off on one machine.",
+  "_comment": "Usage and performance stats go to the app owner's PostHog project. The project key is a write-only ingest key (safe to publish). Leave projectKey empty to turn telemetry off for everyone. required=true (beta): people must accept the stats to use the app; set it to false to make them optional again. COPILOT_TELEMETRY=0 turns them off on a developer machine.",
   "host": "https://us.i.posthog.com",
-  "projectKey": "phc_x8VUUFsvQRbATzeJsVS6KSHMavCfr52dtdAbrTHVQmXv"
+  "projectKey": "phc_x8VUUFsvQRbATzeJsVS6KSHMavCfr52dtdAbrTHVQmXv",
+  "required": true
 }

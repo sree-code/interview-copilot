@@ -401,10 +401,13 @@ function WindowTab() {
       <Section
         title="Privacy"
         description={state.telemetry?.configured
-          ? "Anonymous usage and speed stats help the app's author make it faster: timings, errors, which features are used, app version, OS and your country (from your IP). Never transcripts, answers, your profile, files or keys."
+          ? "Anonymous usage and speed stats help the app's author make it faster: timings, errors, which features are used, app version, OS, and your country and city (estimated from your IP). Never transcripts, answers, your profile, files or keys."
           : 'Usage stats are turned off in this build. Nothing is sent anywhere except to your AI and transcription services.'}
       >
-        {state.telemetry?.configured && (
+        {state.telemetry?.required && (
+          <Text size="sm" color="secondary">Required while the app is in beta.</Text>
+        )}
+        {state.telemetry?.configured && !state.telemetry.required && (
           <Switch
             label="Share anonymous usage stats"
             value={state.telemetry.consent === true}

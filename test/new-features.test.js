@@ -159,6 +159,29 @@ test('telemetry: after opt-in, batches go to /batch/ with anonymous id and safe 
   assert.equal(event.properties.distinct_id, saved.installId);
 });
 
+test('telemetry: required (beta) means no opt-out, and an earlier "no" is asked again', async () => {
+  const config = { host: 'https://ingest.example', projectKey: 'phc_test', required: true };
+  const { telemetry, sent, dir } = telemetryWith({ config });
+  assert.deepEqual(telemetry.getStatus(), { configured: true, required: true, consent: null, askUser: true });
+  telemetry.setConsent(false);
+  assert.equal(telemetry.getStatus().askUser, true);
+  assert.equal(telemetry.track('app_started'), false);
+  telemetry.setConsent(true);
+  assert.equal(telemetry.getStatus().askUser, false);
+  assert.equal(telemetry.track('app_started'), true);
+  await telemetry.flush();
+  assert.equal(sent.length, 1);
+  telemetry.setConsent(false); // ignored: can't turn it off in a beta build
+  assert.equal(telemetry.getStatus().consent, true);
+
+  // Someone who said no while stats were optional must accept now.
+  fs.writeFileSync(path.join(dir, 'telemetry.json'), JSON.stringify({ installId: 'x', consent: false }));
+  const again = createTelemetry({ app: fakeApp(dir), config, env: {}, argv: [], fetchImpl: async () => ({ ok: true }), setInterval: () => ({ unref() {} }), clearInterval: () => {} });
+  assert.equal(again.getStatus().askUser, true);
+  // CI and smoke tests are never gated.
+  assert.equal(telemetryWith({ config, env: { CI: 'true' } }).telemetry.getStatus().askUser, false);
+});
+
 test('telemetry: off in CI, smoke tests and with COPILOT_TELEMETRY=0; no key = off', () => {
   assert.equal(telemetryWith({ env: { CI: 'true' } }).telemetry.getStatus().configured, false);
   assert.equal(telemetryWith({ argv: ['--smoke-test'] }).telemetry.getStatus().configured, false);

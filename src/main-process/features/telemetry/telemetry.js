@@ -77,6 +77,9 @@ function createTelemetry({
     || argv.includes('--smoke-test')
     || Boolean(env.CI);
   const configured = Boolean(host && projectKey) && !disabledHere;
+  // Beta builds: the stats are a condition of using the app, so "no" isn't
+  // an option and anyone who said no before is asked again.
+  const required = configured && config.required === true;
 
   const statePath = path.join(stateDir || app.getPath('userData'), 'telemetry.json');
   let state = { installId: '', consent: null, decidedAt: null };
@@ -187,6 +190,7 @@ function createTelemetry({
 
   function setConsent(value) {
     const next = Boolean(value);
+    if (required && !next) return getStatus();
     state = { ...state, consent: next, decidedAt: new Date(now()).toISOString() };
     save();
     if (next) {
@@ -203,8 +207,9 @@ function createTelemetry({
   function getStatus() {
     return {
       configured,
+      required,
       consent: state.consent,
-      askUser: configured && state.consent === null
+      askUser: required ? state.consent !== true : configured && state.consent === null
     };
   }
 
