@@ -26,6 +26,12 @@ function createWindowController({
   let isRecoveryReloadInProgress = false;
   let lastRecoveryReloadAt = 0;
   let activeWindowOpacityLevel = DEFAULT_WINDOW_OPACITY_LEVEL;
+  // Compact mode: a small answer-only strip. Normal bounds are restored on exit.
+  let compactMode = false;
+  let normalBounds = null;
+  let compactBounds = null;
+  const COMPACT_MIN_WIDTH = 320;
+  const COMPACT_MIN_HEIGHT = 120;
 
   const RECOVERY_RELOAD_COOLDOWN_MS = 5000;
 
@@ -219,8 +225,10 @@ function createWindowController({
     const display = screen.getDisplayMatching(rawBounds);
     const workArea = display && display.workArea ? display.workArea : screen.getPrimaryDisplay().workArea;
 
-    const width = clamp(rawBounds.width, WINDOW_MIN_WIDTH, workArea.width);
-    const height = clamp(rawBounds.height, WINDOW_MIN_HEIGHT, workArea.height);
+    const minWidth = compactMode ? COMPACT_MIN_WIDTH : WINDOW_MIN_WIDTH;
+    const minHeight = compactMode ? COMPACT_MIN_HEIGHT : WINDOW_MIN_HEIGHT;
+    const width = clamp(rawBounds.width, minWidth, workArea.width);
+    const height = clamp(rawBounds.height, minHeight, workArea.height);
     const x = clamp(rawBounds.x, workArea.x, workArea.x + workArea.width - width);
     const y = clamp(rawBounds.y, workArea.y, workArea.y + workArea.height - height);
 
@@ -320,6 +328,70 @@ function createWindowController({
     }
 
     mainWindow.setPosition(x, y);
+  }
+
+  function getCurrentWorkArea() {
+    const bounds = mainWindow.getBounds();
+    const display = screen.getDisplayMatching(bounds) || screen.getPrimaryDisplay();
+    return display.workArea;
+  }
+
+  // Top center of the screen the window is on, just under where a laptop
+  // webcam sits, so reading the answer looks like eye contact.
+  function moveToTopCenter() {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return { error: 'Main window not available' };
+    }
+    const workArea = getCurrentWorkArea();
+    const { width } = mainWindow.getBounds();
+    mainWindow.setPosition(
+      workArea.x + Math.round((workArea.width - width) / 2),
+      workArea.y + 8
+    );
+    return mainWindow.getBounds();
+  }
+
+  function setCompactMode(enabled) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return { error: 'Main window not available' };
+    }
+    const next = Boolean(enabled);
+    if (next === compactMode) {
+      return { compact: compactMode };
+    }
+
+    if (next) {
+      normalBounds = mainWindow.getBounds();
+      compactMode = true;
+      mainWindow.setMinimumSize(COMPACT_MIN_WIDTH, COMPACT_MIN_HEIGHT);
+      if (compactBounds) {
+        mainWindow.setBounds(getSafeWindowBounds(compactBounds), false);
+      } else {
+        const workArea = getCurrentWorkArea();
+        const width = clamp(Math.round(workArea.width * 0.36), 460, 720);
+        const height = 210;
+        mainWindow.setBounds(getSafeWindowBounds({
+          x: workArea.x + Math.round((workArea.width - width) / 2),
+          y: workArea.y + 8,
+          width,
+          height
+        }), false);
+      }
+    } else {
+      compactBounds = mainWindow.getBounds();
+      compactMode = false;
+      mainWindow.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT);
+      if (normalBounds) {
+        mainWindow.setBounds(getSafeWindowBounds(normalBounds), false);
+      }
+    }
+
+    sendToRenderer('compact-mode-changed', compactMode);
+    return { compact: compactMode };
+  }
+
+  function isCompactMode() {
+    return compactMode;
   }
 
   function clampWindowSizePreset(preset) {
@@ -424,6 +496,14 @@ function createWindowController({
       moveToPosition('bottom');
     });
 
+    registerShortcut('toggleCompact', () => {
+      setCompactMode(!compactMode);
+    });
+
+    registerShortcut('moveWindowTopCenter', () => {
+      moveToTopCenter();
+    });
+
     registerShortcut('windowSizePreset1', () => {
       setWindowSizePreset(1);
     });
@@ -482,6 +562,9 @@ function createWindowController({
     getWindowBounds,
     getWindowOpacityLevel,
     hasWindow,
+    isCompactMode,
+    moveToTopCenter,
+    setCompactMode,
     markVisible,
     registerShortcuts,
     setWindowSizePreset,

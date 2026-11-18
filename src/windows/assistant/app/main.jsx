@@ -9,6 +9,8 @@ import { createSessionStore } from './engine/session-store.js';
 import { StoreContext } from './useStore.js';
 
 const store = createSessionStore(window.electronAPI);
+// Handle for the smoke test's screenshot run and for debugging in DevTools.
+window.__copilotStore = store;
 
 createRoot(document.getElementById('app')).render(
   <StoreContext.Provider value={store}>

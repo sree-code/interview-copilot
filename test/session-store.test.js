@@ -114,3 +114,23 @@ test('manual context is added as a You line and used as AI context', async () =>
   store.actions.addManualContext('I prefer Kotlin');
   assert.match(store.contextBundle().contextString, /You: I prefer Kotlin/);
 });
+
+test('compact mode follows the main process', async () => {
+  const calls = [];
+  const api = fakeApi({ setCompactMode: async (on) => { calls.push(on); return { compact: on }; }, getCompactMode: async () => false });
+  api.onCompactModeChanged = (fn) => { api._compact = fn; return () => {}; };
+  const store = await ready(api);
+  await store.actions.toggleCompact();
+  assert.deepEqual(calls, [true]);
+  assert.equal(store.getState().compact, true);
+  api._compact(false); // e.g. Alt+Shift+M pressed while another app has focus
+  assert.equal(store.getState().compact, false);
+});
+
+test('panel background level is clamped to 0-100', async () => {
+  const store = await ready(fakeApi());
+  store.actions.setBackgroundLevel(140);
+  assert.equal(store.getState().backgroundLevel, 100);
+  store.actions.setBackgroundLevel(-5);
+  assert.equal(store.getState().backgroundLevel, 0);
+});

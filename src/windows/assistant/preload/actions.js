@@ -104,6 +104,24 @@ function createInvokeActions(ipcRenderer) {
       fallback: (error) => ({ error: error.message })
     }),
 
+    setCompactMode: invokeWithFallback(ipcRenderer, {
+      channel: 'set-compact-mode',
+      label: 'setCompactMode',
+      fallback: (error) => ({ error: error.message })
+    }),
+
+    getCompactMode: invokeWithFallback(ipcRenderer, {
+      channel: 'get-compact-mode',
+      label: 'getCompactMode',
+      fallback: () => false
+    }),
+
+    moveWindowTopCenter: invokeWithFallback(ipcRenderer, {
+      channel: 'move-window-top-center',
+      label: 'moveWindowTopCenter',
+      fallback: (error) => ({ error: error.message })
+    }),
+
     setWindowSizePreset: invokeWithFallback(ipcRenderer, {
       channel: 'set-window-size-preset',
       label: 'setWindowSizePreset',

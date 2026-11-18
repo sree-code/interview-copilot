@@ -200,6 +200,18 @@ function registerAssistantIpc({
     return windowController.setWindowBounds(nextBounds);
   });
 
+  ipcMain.handle('set-compact-mode', (_event, enabled) => {
+    return windowController.setCompactMode(Boolean(enabled));
+  });
+
+  ipcMain.handle('get-compact-mode', () => {
+    return windowController.isCompactMode();
+  });
+
+  ipcMain.handle('move-window-top-center', () => {
+    return windowController.moveToTopCenter();
+  });
+
   ipcMain.handle('set-window-size-preset', (_event, payload = {}) => {
     const preset = typeof payload === 'number' ? payload : payload?.preset;
     return windowController.setWindowSizePreset(preset);

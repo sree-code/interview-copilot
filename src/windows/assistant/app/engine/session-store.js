@@ -19,6 +19,24 @@ import {
 const AI_CONTEXT_CHAR_BUDGET = 12000;
 const MAX_LOGS = 80;
 const LIVE_ANSWER_ACTION = 'autoAnswer';
+// Background opacity of the panel in percent. Text always stays fully
+// opaque; only the panel behind it fades. Saved per machine.
+const BACKGROUND_KEY = 'copilot.backgroundLevel';
+const DEFAULT_BACKGROUND_LEVEL = 100;
+
+function clampBackgroundLevel(level) {
+  const value = Math.round(Number(level));
+  return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : DEFAULT_BACKGROUND_LEVEL;
+}
+
+function readBackgroundLevel() {
+  try {
+    const saved = globalThis.localStorage?.getItem(BACKGROUND_KEY);
+    return saved == null ? DEFAULT_BACKGROUND_LEVEL : clampBackgroundLevel(saved);
+  } catch (_) {
+    return DEFAULT_BACKGROUND_LEVEL;
+  }
+}
 
 export const AI_ACTIONS = ['askAi', 'screenAi', 'suggest', 'notes', 'insights'];
 
@@ -42,7 +60,9 @@ export function createSessionStore(api = window.electronAPI) {
     mobile: { listening: false, port: 7823, urls: [], clientCount: 0, error: null },
     interview: null,
     hidden: false,
-    theme: 'light'
+    theme: 'light',
+    compact: false,
+    backgroundLevel: readBackgroundLevel()
   };
 
   const listeners = new Set();
@@ -402,6 +422,22 @@ export function createSessionStore(api = window.electronAPI) {
     await reloadSettings();
     return result;
   }
+  // ── Window layout ──
+  async function setCompact(enabled) {
+    const result = await api.setCompactMode?.(enabled);
+    if (result && typeof result.compact === 'boolean') set({ compact: result.compact });
+  }
+  function toggleCompact() {
+    return setCompact(!state.compact);
+  }
+  async function moveTopCenter() {
+    await api.moveWindowTopCenter?.();
+  }
+  function setBackgroundLevel(level) {
+    const value = clampBackgroundLevel(level);
+    set({ backgroundLevel: value });
+    try { globalThis.localStorage?.setItem(BACKGROUND_KEY, String(value)); } catch (_) { /* ignore */ }
+  }
   async function setTheme(theme) {
     set({ theme });
     try { await api.setThemePreference(theme); } catch (_) { /* ignore */ }
@@ -507,6 +543,7 @@ export function createSessionStore(api = window.electronAPI) {
       log('info', 'stopped-event', 'Stop acknowledged', source);
     });
     api.onToggleVoiceRecognition?.(() => toggleTranscription().catch((error) => log('error', 'shortcut-toggle-failed', error.message)));
+    api.onCompactModeChanged?.((compact) => set({ compact: Boolean(compact) }));
     api.onTriggerAskAi?.(() => askAi().catch((error) => log('error', 'shortcut-ask-ai-failed', error.message)));
     api.onSttDebug?.((data) => log(data?.level || 'info', data?.event || 'stt-debug', data?.message || '', data?.source || null, data?.meta || null, data?.ts || Date.now()));
 
@@ -548,6 +585,7 @@ export function createSessionStore(api = window.electronAPI) {
   async function init() {
     bindIpc();
     await reloadSettings();
+    try { set({ compact: Boolean(await api.getCompactMode?.()) }); } catch (_) { /* ignore */ }
     try {
       const interview = await reloadInterview();
       if (interview?.session?.questions > 0) {
@@ -586,6 +624,10 @@ export function createSessionStore(api = window.electronAPI) {
       saveSettings,
       reloadSettings,
       setTheme,
+      setCompact,
+      toggleCompact,
+      moveTopCenter,
+      setBackgroundLevel,
       saveProfile,
       importText,
       importQa,

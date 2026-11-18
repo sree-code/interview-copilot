@@ -7,13 +7,13 @@ import { Timer } from '@astryxdesign/core/Timer';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Icon } from '@astryxdesign/core/Icon';
 import {
-  Camera, ChartBar, EyeOff, Headphones, Lightbulb, Mic, Moon, NotebookPen, ScanText,
+  ArrowUpToLine, Camera, ChartBar, Minimize2, EyeOff, Headphones, Lightbulb, Mic, Moon, NotebookPen, ScanText,
   Settings, Smartphone, Sparkles, Sun, Trash2, X, Zap
 } from 'lucide-react';
 
 import { useSessionState, useStore } from '../useStore.js';
 
-function listeningStatus(sources) {
+export function listeningStatus(sources) {
   const all = [sources.system, sources.mic];
   if (all.some((s) => s.active && s.status === 'listening')) return { variant: 'success', label: 'Listening', pulsing: true };
   if (all.some((s) => s.status === 'connecting')) return { variant: 'warning', label: 'Connecting', pulsing: true };
@@ -36,6 +36,7 @@ export function TopBar({ onOpenSettings, onClose }) {
     { label: 'Insights', icon: ChartBar, isDisabled: !hasModelKey || inFlight.insights, onClick: actions.insights },
     { label: 'Answer the last question now', icon: Zap, isDisabled: !hasModelKey, onClick: actions.answerLastQuestion },
     { type: 'divider' },
+    { label: 'Move under webcam (Alt+Shift+W)', icon: ArrowUpToLine, onClick: actions.moveTopCenter },
     { label: `Take screenshot${screenshots ? ` (${screenshots} taken)` : ''}`, icon: Camera, onClick: actions.screenshot },
     {
       label: phoneUrl ? 'Copy phone companion link' : 'Phone companion: off',
@@ -129,6 +130,7 @@ export function TopBar({ onOpenSettings, onClose }) {
           size="sm"
           onClick={() => actions.setTheme(theme === 'dark' ? 'light' : 'dark')}
         />
+        <IconButton label="Compact mode" tooltip="Compact: latest answer only (Alt+Shift+M)" icon={<Icon icon={Minimize2} />} variant="ghost" size="sm" onClick={() => actions.setCompact(true)} />
         <IconButton label="Settings" tooltip="Settings" icon={<Icon icon={Settings} />} variant="ghost" size="sm" onClick={() => onOpenSettings('ai')} />
         <IconButton label="Hide window" tooltip="Hide (Alt+Shift+X)" icon={<Icon icon={EyeOff} />} variant="ghost" size="sm" onClick={actions.hideNow} />
         <IconButton label="Close app" tooltip="Close" icon={<Icon icon={X} />} variant="ghost" size="sm" onClick={onClose} />

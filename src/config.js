@@ -126,6 +126,18 @@ const KEYBOARD_SHORTCUTS = [
     accelerator: 'Alt+Shift+Down'
   },
   {
+    id: 'toggleCompact',
+    buttonLabel: 'Compact Mode',
+    description: 'Compact mode: show only the latest answer',
+    accelerator: 'Alt+Shift+M'
+  },
+  {
+    id: 'moveWindowTopCenter',
+    buttonLabel: 'Under Webcam',
+    description: 'Move window to top center (under the webcam)',
+    accelerator: 'Alt+Shift+W'
+  },
+  {
     id: 'windowSizePreset1',
     buttonLabel: 'Size Preset 1',
     description: 'Resize window to minimum size',

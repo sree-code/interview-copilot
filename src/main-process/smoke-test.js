@@ -59,7 +59,17 @@ async function captureScreens(contents, dir) {
       if (found !== 'ok') console.log(`Tab ${tab} not clicked (${found})`);
       await shot(`settings-${tab.toLowerCase()}`);
     }
+    await contents.executeJavaScript(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
   }
+  // See-through panel, then compact mode (latest answer only).
+  await contents.executeJavaScript('window.__copilotStore?.actions.setBackgroundLevel(35)');
+  await shot('see-through');
+  await contents.executeJavaScript('window.__copilotStore?.actions.setCompact(true)');
+  await wait(500);
+  await shot('compact-see-through');
+  await contents.executeJavaScript('window.__copilotStore?.actions.setBackgroundLevel(100)');
+  await shot('compact');
+  await contents.executeJavaScript('window.__copilotStore?.actions.setCompact(false)');
 }
 
 function runSmokeTest({ app, mainWindow }) {

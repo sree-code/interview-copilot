@@ -81,6 +81,16 @@ If no interviewer text appears: make sure sound plays through your **default** o
 
 ---
 
+## Setting up the screen for a real interview
+
+1. **Check that the window is hidden from screen sharing.** It needs Windows 10 version 2004 or newer, or Windows 11. Before your first real interview, start a test call (or a Teams/Zoom recording), share your **entire screen**, and check that the assistant window doesn't appear in what's shared.
+2. **Compact mode:** press **Alt+Shift+M** (or the shrink icon in the top bar). The window becomes a small strip at the top center of the screen, right under the webcam. It shows only the interviewer's latest line and the latest answer, in larger text. Reading there looks like eye contact. Press **Alt+Shift+M** again for the full view.
+3. **See-through background:** Settings → **Window** → **Panel background**. Around 30–50% lets you see the interviewer's video through the window while the text stays solid.
+4. **In the meeting app,** use speaker view and put the interviewer's video right below the strip, near the top center of the screen.
+5. Drag the strip by its top line to move it. Drag its edges to resize it. **Alt+Shift+W** puts it back under the webcam.
+
+---
+
 ## Shortcuts
 
 | Keys | Action |
@@ -91,6 +101,8 @@ If no interviewer text appears: make sure sound plays through your **default** o
 | Alt+Shift+E | Screen AI (answer from screenshot) |
 | Alt+Shift+G | Suggest |
 | Alt+Shift+H | Show / hide window |
+| Alt+Shift+M | Compact mode (latest answer only) on / off |
+| Alt+Shift+W | Move window to top center, under the webcam |
 | Alt+Shift+Arrows | Move window |
 | Alt+Shift+1…4 | Window size presets |
 | Alt+Shift+C | Clear chat |

@@ -253,7 +253,8 @@ function ProfileTab() {
 // ── Window ──
 function WindowTab() {
   const { actions } = useStore();
-  const { settings, theme } = useSessionState();
+  const state = useSessionState();
+  const { settings, theme } = state;
   const [opacity, setOpacity] = useState(settings?.windowOpacityLevel ?? 10);
   const run = useAsync(actions);
   useEffect(() => { if (settings) setOpacity(settings.windowOpacityLevel ?? 10); }, [settings]);
@@ -276,7 +277,23 @@ function WindowTab() {
     <VStack gap={6}>
       <Section title="Appearance">
         <Switch label="Dark mode" value={theme === 'dark'} onChange={(dark) => actions.setTheme(dark ? 'dark' : 'light')} />
-        <Slider label="Window opacity" min={1} max={10} step={1} value={opacity} onChange={setOpacity} onChangeEnd={saveOpacity} formatValue={(v) => `${v}/10`} />
+        <Slider
+          label="Panel background"
+          description="Lower it to see the interviewer through the window. Text stays solid."
+          min={0}
+          max={100}
+          step={5}
+          value={state.backgroundLevel}
+          onChange={actions.setBackgroundLevel}
+          formatValue={(v) => `${v}%`}
+        />
+        <Slider label="Whole window opacity" description="Fades everything, text included." min={1} max={10} step={1} value={opacity} onChange={setOpacity} onChangeEnd={saveOpacity} formatValue={(v) => `${v}/10`} />
+      </Section>
+      <Section title="During the interview" description="Compact mode shows only the interviewer's latest line and the latest answer, in a small strip at the top center of the screen, just under the webcam.">
+        <Switch label="Compact mode (Alt+Shift+M)" value={state.compact} onChange={(on) => actions.setCompact(on)} />
+        <HStack gap={2}>
+          <Button label="Move under webcam (Alt+Shift+W)" size="sm" onClick={actions.moveTopCenter} />
+        </HStack>
       </Section>
     </VStack>
   );

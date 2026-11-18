@@ -64,3 +64,43 @@ html, body, #app { height: 100%; margin: 0; background: transparent; overflow: h
 .resize-se { bottom: 0; right: 0; cursor: nwse-resize; }
 .resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
 .resize-nw { top: 0; left: 0; cursor: nwse-resize; }
+
+/* ── See-through panel ──
+   --panel-alpha (0–100%) fades only the backgrounds; text stays opaque.
+   Below 100% a soft halo in the background colour keeps text readable over
+   whatever is behind the window (e.g. the interviewer's video). */
+.shell {
+  background: color-mix(in srgb, var(--color-background-body) var(--panel-alpha, 100%), transparent);
+  border-color: color-mix(in srgb, var(--color-border) var(--panel-alpha, 100%), transparent);
+}
+.shell .topbar {
+  background: color-mix(in srgb, var(--color-background-surface) var(--panel-alpha, 100%), transparent);
+}
+.shell.see-through {
+  text-shadow:
+    0 0 2px var(--color-background-body),
+    0 0 4px var(--color-background-body),
+    0 0 8px var(--color-background-body);
+}
+
+/* ── Compact mode: latest answer only ── */
+.compact { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.compact-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2, 8px);
+  padding: 4px var(--spacing-2, 8px) 4px var(--spacing-3, 12px);
+  min-height: 34px;
+  -webkit-app-region: drag;
+}
+.compact-question { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.compact-question > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.compact-buttons { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.compact-answer {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px var(--spacing-3, 12px) var(--spacing-3, 12px);
+  font-size: 1.12em;
+  line-height: 1.5;
+}

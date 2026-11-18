@@ -10,6 +10,7 @@ import { useSessionState, useStore } from './useStore.js';
 import { TopBar } from './components/TopBar.jsx';
 import { Conversation } from './components/Conversation.jsx';
 import { SettingsDrawer } from './components/SettingsDrawer.jsx';
+import { CompactView } from './components/CompactView.jsx';
 import { ResizeHandles } from './components/ResizeHandles.jsx';
 import { useLocalShortcuts } from './components/useLocalShortcuts.js';
 
@@ -44,8 +45,12 @@ export function App() {
     <Theme theme={neutralTheme} mode={state.theme === 'dark' ? 'dark' : 'light'}>
       <ToastViewport position="bottomEnd" maxVisible={2}>
         <ToastBridge />
-        <div className="shell">
+        <div
+          className={`shell${state.compact ? ' is-compact' : ''}${state.backgroundLevel < 100 ? ' see-through' : ''}`}
+          style={{ '--panel-alpha': `${state.backgroundLevel}%` }}
+        >
           <ResizeHandles />
+          {state.compact ? <CompactView /> : (<>
           <TopBar onOpenSettings={openSettings} onClose={() => setConfirmClose(true)} />
           {missing.length > 0 && (
             <div className="banner-row">
@@ -57,6 +62,7 @@ export function App() {
             </div>
           )}
           <Conversation onOpenSettings={openSettings} />
+          </>)}
         </div>
         <SettingsDrawer isOpen={settingsOpen} onOpenChange={setSettingsOpen} tab={settingsTab} onTabChange={setSettingsTab} />
         <AlertDialog

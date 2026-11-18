@@ -61,6 +61,11 @@ With fast mode off, nothing answers automatically. Use the buttons instead.
 | ⋯ → Answer the last question now | Forces the fast-mode answer for the latest question |
 | Eye icon on a line | Includes or excludes that line from AI context |
 | Hide (Alt+Shift+X) | Hides the window instantly |
+| Compact (Alt+Shift+M) | Small strip with only the interviewer's latest line and the latest answer, at the top center under the webcam |
+| Under webcam (Alt+Shift+W) | Moves the window to the top center of its screen |
+| Settings → Window → Panel background | Fades only the background (text stays solid) so you can see the interviewer through it |
+
+The window is excluded from screen sharing (`setContentProtection`, on by default via `HIDE_FROM_SCREEN_CAPTURE=true`). On Windows 10 version 2004 and newer, and on Windows 11, it's left out of the capture entirely.
 
 ## 6. Where things are stored
 | What | Where |

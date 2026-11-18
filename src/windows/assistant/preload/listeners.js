@@ -96,6 +96,11 @@ function createEventActions(ipcRenderer) {
     label: 'onSttDebug'
   });
 
+  const onCompactModeChanged = createEventListener(ipcRenderer, {
+    channel: 'compact-mode-changed',
+    label: 'onCompactModeChanged'
+  });
+
   const onMobileServerStatus = createEventListener(ipcRenderer, {
     channel: 'mobile-server-status',
     label: 'onMobileServerStatus'
@@ -127,6 +132,7 @@ function createEventActions(ipcRenderer) {
     onTriggerAskAi,
     onSttDebug: (callback) => rawOnSttDebug((data) => callback(data || {})),
     onMobileServerStatus,
+    onCompactModeChanged,
     onClearFromMobile
   };
 }
