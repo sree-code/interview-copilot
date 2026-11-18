@@ -54,16 +54,16 @@ You need two API keys (both have free tiers):
 ## First-time setup (both options)
 
 1. **Allow the microphone:** Windows **Settings → Privacy & security → Microphone** → turn on **Microphone access** and **Let desktop apps access your microphone**.
-2. In the app, click the **gear (Settings)** button.
-3. **AI Provider:** choose **Fast cloud model (Groq, OpenAI, Cerebras…)**, pick **Groq**, paste your Groq key. Model: `openai/gpt-oss-20b` (fastest in testing).
+2. In the app, click the **gear (Settings)** button (or **Open settings** on the yellow banner).
+3. **AI & keys** tab → **AI provider:** choose **Fast cloud model**, Service **Groq**, paste your Groq key. Model: `openai/gpt-oss-20b` (fastest in testing).
 4. **AssemblyAI API Key:** paste your AssemblyAI key.
-5. **Interview profile:**
+5. **Interview** tab:
    - Fill in your name, current role, target company and job title.
-   - **Job description:** paste it or click **Import file**.
-   - **Resume:** click **Import PDF**.
-   - **Prepared Q&A:** click **Import PDF** and choose your Q&A file (format: `Q: ...` / `A: ...`, see README).
-   - Tick **Fast mode** so answers appear automatically.
-6. Click **Save Settings**.
+   - **Job description:** paste it or click **Import job description**.
+   - **Resume:** click **Import resume PDF**.
+   - **Prepared Q&A:** click **Import Q&A file** and choose your Q&A file (format: `Q: ...` / `A: ...`, see README).
+   - Turn on **Answer automatically** (fast mode).
+6. Click **Save settings** on the AI & keys tab and **Save profile** on the Interview tab.
 
 Everything is saved in `%APPDATA%\Meeting Assistant` and kept across restarts and updates.
 

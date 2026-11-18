@@ -25,9 +25,16 @@
     "ws": "^8.19.0"
   },
   "devDependencies": {
+    "@astryxdesign/cli": "0.7.16",
+    "@astryxdesign/core": "0.7.16",
+    "@astryxdesign/theme-neutral": "0.7.16",
+    "@stylexjs/stylex": "0.19.2",
     "electron": "45.2.3",
     "electron-builder": "26.18.1",
-    "esbuild": "^0.25.6"
+    "esbuild": "^0.25.6",
+    "lucide-react": "1.74.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "build": {
     "appId": "dev.local.meeting-assistant",

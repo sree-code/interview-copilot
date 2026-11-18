@@ -1,0 +1,116 @@
+'use strict';
+
+// Tests the Astryx UI's logic layer (src/windows/assistant/app/engine) with
+// a fake electronAPI. The engine is ESM for the browser, so it's bundled to
+// CommonJS with esbuild first.
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const esbuild = require('esbuild');
+
+const outfile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'engine-')), 'engine.cjs');
+esbuild.buildSync({
+  entryPoints: [path.join(__dirname, '..', 'src', 'windows', 'assistant', 'app', 'engine', 'session-store.js')],
+  outfile,
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  logLevel: 'error'
+});
+global.window = { addEventListener() {} };
+const { createSessionStore } = require(outfile);
+
+function fakeApi(overrides = {}) {
+  const handlers = {};
+  const on = (name) => (fn) => { (handlers[name] ||= []).push(fn); return () => {}; };
+  const api = {
+    emit: (name, data) => (handlers[name] || []).forEach((fn) => fn(data)),
+    getSettings: async () => ({ aiProvider: 'openai-compatible', fastLlm: { apiKey: 'k' }, hasAssemblyAiApiKey: true }),
+    interviewGetState: async () => ({ profile: { fastMode: true }, bank: { count: 2 }, session: { questions: 0 } }),
+    getMobileServerStatus: async () => ({}),
+    sendAudioChunk() {},
+    ...overrides
+  };
+  for (const name of ['onScreenshotTakenStealth', 'onAnalysisStart', 'onAnalysisResult', 'onEmergencyClear', 'onError', 'onVoskStatus', 'onVoskPartial', 'onVoskFinal', 'onVoskError', 'onVoskStopped', 'onToggleVoiceRecognition', 'onTriggerAskAi', 'onSttDebug', 'onAiStreamStart', 'onAiStreamChunk', 'onAiStreamEnd', 'onClearFromMobile', 'onMobileServerStatus']) {
+    api[name] = on(name);
+  }
+  return api;
+}
+
+async function ready(api) {
+  const store = createSessionStore(api);
+  await store.init();
+  return store;
+}
+
+const visible = (store) => store.getState().messages
+  .filter((m) => m.type !== 'system')
+  .map((m) => `${m.type}:${m.label ? `${m.label}:` : ''}${m.content}`);
+
+test('detects configured keys from settings', async () => {
+  const store = await ready(fakeApi());
+  assert.equal(store.getState().hasModelKey, true);
+  assert.equal(store.getState().hasAssemblyKey, true);
+});
+
+test('interviewer line appears at once and stays above its answer', async () => {
+  const api = fakeApi();
+  const store = await ready(api);
+  api.emit('onVoskFinal', { source: 'system', text: 'Could you introduce yourself?' });
+  api.emit('onAiStreamStart', { actionId: 'autoAnswer', answerId: 'a1', label: 'Your prepared answer' });
+  api.emit('onAiStreamChunk', { actionId: 'autoAnswer', answerId: 'a1', text: 'I build payment systems.' });
+  api.emit('onAiStreamEnd', { actionId: 'autoAnswer', answerId: 'a1' });
+  api.emit('onVoskFinal', { source: 'system', text: 'And why this company?' });
+  assert.deepEqual(visible(store), [
+    'voice-system:Could you introduce yourself?',
+    'ai-response:Your prepared answer:I build payment systems.',
+    'voice-system:And why this company?'
+  ]);
+});
+
+test('consecutive interviewer fragments merge into one line', async () => {
+  const api = fakeApi();
+  const store = await ready(api);
+  api.emit('onVoskFinal', { source: 'system', text: 'Tell me about' });
+  api.emit('onVoskFinal', { source: 'system', text: 'a hard bug you fixed.' });
+  assert.deepEqual(visible(store), ['voice-system:Tell me about a hard bug you fixed.']);
+});
+
+test('interrupted live answer is marked and stops streaming', async () => {
+  const api = fakeApi();
+  const store = await ready(api);
+  api.emit('onAiStreamStart', { actionId: 'autoAnswer', answerId: 'a1', label: 'Suggested answer' });
+  api.emit('onAiStreamChunk', { actionId: 'autoAnswer', answerId: 'a1', text: 'First I would' });
+  api.emit('onAiStreamEnd', { actionId: 'autoAnswer', answerId: 'a1', interrupted: true });
+  const answer = store.getState().messages.find((m) => m.type === 'ai-response');
+  assert.equal(answer.streaming, false);
+  assert.match(answer.note, /Interrupted/);
+});
+
+test('other actions\' stream chunks do not leak into live answers', async () => {
+  const api = fakeApi();
+  const store = await ready(api);
+  api.emit('onAiStreamStart', { actionId: 'autoAnswer', answerId: 'a1', label: 'Suggested answer' });
+  api.emit('onAiStreamChunk', { actionId: 'askAi', text: 'unrelated' });
+  api.emit('onAiStreamChunk', { actionId: 'autoAnswer', answerId: 'a1', text: 'mine' });
+  assert.equal(store.getState().messages.find((m) => m.type === 'ai-response').content, 'mine');
+});
+
+test('Listen without an AssemblyAI key shows an error instead of starting', async () => {
+  const toasts = [];
+  const api = fakeApi({ getSettings: async () => ({ aiProvider: 'gemini', hasGeminiApiKeys: false, hasAssemblyAiApiKey: false }) });
+  const store = await ready(api);
+  store.onToast((t) => toasts.push(t));
+  await store.actions.toggleTranscription();
+  assert.equal(toasts[0]?.type, 'error');
+  assert.equal(store.getState().sources.system.status, 'off');
+});
+
+test('manual context is added as a You line and used as AI context', async () => {
+  const store = await ready(fakeApi());
+  store.actions.addManualContext('I prefer Kotlin');
+  assert.match(store.contextBundle().contextString, /You: I prefer Kotlin/);
+});

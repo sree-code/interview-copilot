@@ -1,0 +1,66 @@
+/* Window chrome for the frameless, transparent overlay. Component styling
+   comes from Astryx; this file only handles layout and drag regions. */
+html, body, #app { height: 100%; margin: 0; background: transparent; overflow: hidden; }
+
+.shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-background-body);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-container, 12px);
+  overflow: hidden;
+}
+
+.drag { -webkit-app-region: drag; }
+.no-drag, button, input, textarea, select, [role="menu"], [role="dialog"] { -webkit-app-region: no-drag; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2, 8px);
+  padding: var(--spacing-2, 8px) var(--spacing-3, 12px);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background-surface);
+  -webkit-app-region: drag;
+  min-height: 44px;
+}
+.topbar-status { display: flex; align-items: center; gap: var(--spacing-2, 8px); flex: 0 0 auto; }
+.topbar-actions { display: flex; align-items: center; gap: var(--spacing-1, 4px); flex: 1 1 auto; min-width: 0; justify-content: center; }
+.topbar-window { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.listen-group { display: flex; align-items: center; gap: 2px; padding-right: var(--spacing-2, 8px); margin-right: var(--spacing-1, 4px); border-right: 1px solid var(--color-border); }
+
+.banner-row { padding: var(--spacing-2, 8px) var(--spacing-3, 12px) 0; }
+.busy-line { padding: var(--spacing-1, 4px) var(--spacing-3, 12px); }
+
+.conversation { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
+.drawer-head { padding: var(--spacing-2, 8px) var(--spacing-4, 16px) 0; }
+.drawer-panel { padding: var(--spacing-4, 16px) var(--spacing-1, 4px) var(--spacing-6, 24px); }
+.log-list {
+  max-height: 260px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-element, 8px);
+  padding: var(--spacing-2, 8px);
+}
+.log-row { white-space: pre-wrap; word-break: break-word; }
+.log-error { color: var(--color-text-error, #c62828); }
+
+.resize-handle { position: absolute; z-index: 20; -webkit-app-region: no-drag; }
+.resize-n, .resize-s { left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.resize-e, .resize-w { top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.resize-n { top: 0; } .resize-s { bottom: 0; } .resize-e { right: 0; } .resize-w { left: 0; }
+.resize-ne, .resize-se, .resize-sw, .resize-nw { width: 12px; height: 12px; }
+.resize-ne { top: 0; right: 0; cursor: nesw-resize; }
+.resize-se { bottom: 0; right: 0; cursor: nwse-resize; }
+.resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.resize-nw { top: 0; left: 0; cursor: nwse-resize; }

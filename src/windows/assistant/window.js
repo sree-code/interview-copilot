@@ -64,7 +64,9 @@ function createAssistantWindow({
     backgroundColor: '#00000000'
   });
 
-  const htmlPath = path.join(__dirname, 'renderer.html');
+  // New React + Astryx UI by default; LEGACY_UI=1 loads the original one.
+  const useLegacyUi = /^(1|true|yes)$/i.test(String(process.env.LEGACY_UI || ''));
+  const htmlPath = path.join(__dirname, useLegacyUi ? 'renderer.html' : 'app.html');
   console.log('Loading HTML from:', htmlPath);
   mainWindow.loadFile(htmlPath);
 

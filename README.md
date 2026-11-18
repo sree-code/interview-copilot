@@ -13,6 +13,7 @@ Use it only where recording, transcription, screenshots and AI assistance are al
 - **Answers in your own words.** What you actually say after each question is collected and used as style examples, so suggestions match your vocabulary and sentence length. (No model fine-tuning: it's done with examples in the prompt.)
 - **Fast cloud models.** Any OpenAI-compatible API: Groq, OpenAI, Cerebras, OpenRouter, Gemini's OpenAI endpoint, or a custom URL. `npm run bench:llm` measures which model answers fastest with your keys.
 - **Mic echo removed.** When the interviewer's voice leaks from your speakers into the mic, the duplicate "You" line is dropped.
+- **New interface built with [Astryx](https://github.com/meta/astryx)** (Meta's open-source React design system): a compact top bar, a chat view where answers sit under the question they answer (labelled *Your prepared answer* or *Suggested answer*), a Settings drawer with tabs, dark mode and toasts. The previous interface is still available with `LEGACY_UI=1`. How everything fits together: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 - **Windows first, macOS too.** Windows 10/11 is the main target: an installer and a portable `.exe`, tested on every push by a Windows GitHub Actions job (unit tests, app start-up check, build). System audio uses Electron 45 loopback capture (WASAPI on Windows, CoreAudio tap on macOS 14.2+).
 - **Faster and safer.** No 6 s pause between requests; the conversation is sent once instead of three times; OCR runs in the background; screenshots are downscaled. The renderer is sandboxed with a Content-Security-Policy, TLS checks are back on, the phone companion needs a pairing token, and the app no longer disguises itself as Google Chrome.
 
@@ -26,7 +27,7 @@ npm start
 Then open Settings:
 1. **AI Provider:** pick *Fast cloud model*, choose a service (Groq has a free tier) and paste its key. Or keep Gemini.
 2. **AssemblyAI API Key:** for live transcription.
-3. **Interview profile:** fill in your details, import your resume and prepared Q&A, turn on **Fast mode**, and save.
+3. **Interview** tab: fill in your details, import your resume and prepared Q&A, turn on **Answer automatically** (fast mode), and save.
 
 **Windows (main setup):** full walkthrough in [WINDOWS_SETUP.md](WINDOWS_SETUP.md).
 - Easiest: download the installer from the latest [Windows build](../../actions/workflows/windows.yml) run (open the run → *Artifacts* → `meeting-assistant-windows`), or build it yourself with `npm run build:win`.

@@ -2,7 +2,8 @@
 // Supported providers: 'gemini', 'ollama' and 'openai-compatible'
 // (OpenAI, Groq, Cerebras, OpenRouter, Gemini's OpenAI endpoint...).
 const AI_PROVIDERS = ['gemini', 'ollama', 'openai-compatible'];
-const DEFAULT_AI_PROVIDER = 'gemini';
+// New installs default to the fast cloud model (Groq preset); a saved choice always wins.
+const DEFAULT_AI_PROVIDER = 'openai-compatible';
 
 const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434';
 const DEFAULT_OLLAMA_MODEL = 'llama3.2';
