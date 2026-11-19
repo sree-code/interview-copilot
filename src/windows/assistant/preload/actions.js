@@ -149,6 +149,14 @@ setInterviewWindowOptions: invokeWithFallback(ipcRenderer, {
       fallback: (error) => ({ error: error.message })
     }),
 
+    restoreFromIcon: invokeWithFallback(ipcRenderer, {
+      channel: 'restore-from-icon',
+      label: 'restoreFromIcon',
+      fallback: (error) => ({ error: error.message })
+    }),
+
+    moveIconBy: (dx, dy) => ipcRenderer.send('move-icon-by', { dx: Number(dx) || 0, dy: Number(dy) || 0 }),
+
     moveToNextDisplay: invokeWithFallback(ipcRenderer, {
       channel: 'move-to-next-display',
       label: 'moveToNextDisplay',

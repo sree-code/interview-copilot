@@ -22,7 +22,6 @@ function createWindowController({
 }) {
   let mainWindow = null;
   let isVisible = true;
-  let autoHideTimer = null;
   let isRecoveryReloadInProgress = false;
   let lastRecoveryReloadAt = 0;
   let activeWindowOpacityLevel = DEFAULT_WINDOW_OPACITY_LEVEL;
@@ -105,10 +104,6 @@ function createWindowController({
     }
 
     try {
-      if (autoHideTimer) {
-        clearTimeout(autoHideTimer);
-        autoHideTimer = null;
-      }
 
       isVisible = true;
       mainWindow.setOpacity(getVisibleWindowOpacity());
@@ -187,6 +182,8 @@ function createWindowController({
 
     contents.on('did-finish-load', () => {
       isRecoveryReloadInProgress = false;
+      // A reloaded window starts in full view; tell it it's an icon.
+      if (minimized) sendToRenderer('window-minimized', true);
     });
   }
 
@@ -238,6 +235,7 @@ function createWindowController({
 
   // Next monitor, keeping the same relative spot (compact: under its webcam).
   function moveToNextDisplay() {
+    ensureRestored();
     if (!mainWindow || mainWindow.isDestroyed()) return { error: 'Main window not available' };
     const displays = screen.getAllDisplays().sort((a, b) => (a.bounds.x - b.bounds.x) || (a.bounds.y - b.bounds.y));
     if (displays.length < 2) return { displays: displays.length };
@@ -363,49 +361,82 @@ function createWindowController({
     return mainWindow.getBounds();
   }
 
+  // Hide = shrink to a small, faint icon in the same spot (the full window
+  // is gone, so nothing to see or click by accident). Click the icon, or
+  // press the hide shortcut again, to bring the window back. Drag the icon
+  // to move it; the window comes back centered under it.
+  const ICON_SIZE = 40;
+  let minimized = null; // { bounds, minSize }
+
+  function isMinimized() {
+    return Boolean(minimized);
+  }
+
+  function minimizeToIcon() {
+    if (!mainWindow || mainWindow.isDestroyed()) return { minimized: false };
+    if (minimized) return { minimized: true };
+    const bounds = mainWindow.getBounds();
+    minimized = { bounds, minSize: mainWindow.getMinimumSize() };
+    setMousePassthroughOff();
+    sendToRenderer('window-minimized', true);
+    mainWindow.setMinimumSize(ICON_SIZE, ICON_SIZE);
+    mainWindow.setBounds({
+      x: bounds.x + Math.round((bounds.width - ICON_SIZE) / 2),
+      y: bounds.y,
+      width: ICON_SIZE,
+      height: ICON_SIZE
+    }, false);
+    return { minimized: true };
+  }
+
+  function restoreFromIcon() {
+    if (!mainWindow || mainWindow.isDestroyed() || !minimized) return { minimized: false };
+    const { bounds, minSize } = minimized;
+    minimized = null;
+    const icon = mainWindow.getBounds();
+    const display = screen.getDisplayMatching(icon) || screen.getPrimaryDisplay();
+    const area = display.workArea;
+    const width = Math.min(bounds.width, area.width);
+    const height = Math.min(bounds.height, area.height);
+    const x = clamp(icon.x + Math.round(ICON_SIZE / 2 - width / 2), area.x, area.x + area.width - width);
+    const y = clamp(icon.y, area.y, area.y + area.height - height);
+    if (Array.isArray(minSize) && minSize.length === 2) mainWindow.setMinimumSize(minSize[0], minSize[1]);
+    mainWindow.setBounds({ x, y, width, height }, false);
+    if (!mainWindow.isVisible()) mainWindow.showInactive();
+    sendToRenderer('window-minimized', false);
+    return { minimized: false };
+  }
+
+  function toggleMinimized() {
+    return minimized ? restoreFromIcon() : minimizeToIcon();
+  }
+
+  // Dragging the icon (the renderer sends how far the pointer moved).
+  function moveIconBy(dx, dy) {
+    if (!mainWindow || mainWindow.isDestroyed() || !minimized) return;
+    const stepX = Math.round(Number(dx) || 0);
+    const stepY = Math.round(Number(dy) || 0);
+    if (!stepX && !stepY) return;
+    const [x, y] = mainWindow.getPosition();
+    mainWindow.setPosition(x + stepX, y + stepY);
+  }
+
+  // Anything that moves or resizes the full window brings it back first.
+  function ensureRestored() {
+    if (minimized) restoreFromIcon();
+  }
+
+  // Old names, kept for the existing shortcuts and IPC.
   function toggleStealthMode() {
-    if (autoHideTimer) {
-      clearTimeout(autoHideTimer);
-      autoHideTimer = null;
-    }
-
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return;
-    }
-
-    const stealthModeEnabled = isVisible;
-    isVisible = !stealthModeEnabled;
-    if (isVisible && !mainWindow.isVisible()) {
-      mainWindow.showInactive();
-    }
-    applyWindowOpacity();
-    sendToRenderer('set-stealth-mode', stealthModeEnabled);
+    return toggleMinimized();
   }
 
   function emergencyHide() {
-    if (autoHideTimer) {
-      clearTimeout(autoHideTimer);
-      autoHideTimer = null;
-    }
-
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return;
-    }
-
-    mainWindow.setOpacity(0.01);
-    sendToRenderer('emergency-clear');
-
-    autoHideTimer = setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        isVisible = true;
-        applyWindowOpacity();
-        sendToRenderer('set-stealth-mode', false);
-      }
-      autoHideTimer = null;
-    }, 2000);
+    return toggleMinimized();
   }
 
   function moveToPosition(position) {
+    ensureRestored();
     if (!mainWindow || mainWindow.isDestroyed()) {
       return;
     }
@@ -449,6 +480,7 @@ function createWindowController({
   // Top center of the screen the window is on, just under where a laptop
   // webcam sits, so reading the answer looks like eye contact.
   function moveToTopCenter() {
+    ensureRestored();
     if (!mainWindow || mainWindow.isDestroyed()) {
       return { error: 'Main window not available' };
     }
@@ -462,6 +494,7 @@ function createWindowController({
   }
 
   function setCompactMode(enabled) {
+    ensureRestored();
     if (!mainWindow || mainWindow.isDestroyed()) {
       return { error: 'Main window not available' };
     }
@@ -528,6 +561,7 @@ function createWindowController({
   }
 
   function setWindowSizePreset(preset) {
+    ensureRestored();
     if (!mainWindow || mainWindow.isDestroyed()) {
       return { error: 'Main window not available' };
     }
@@ -655,10 +689,6 @@ function createWindowController({
   }
 
   function destroyWindow() {
-    if (autoHideTimer) {
-      clearTimeout(autoHideTimer);
-      autoHideTimer = null;
-    }
 
     stopOnTopKeeper();
     if (!mainWindow || mainWindow.isDestroyed()) {
@@ -688,6 +718,10 @@ function createWindowController({
     createWindow,
     destroyWindow,
     emergencyHide,
+    isMinimized,
+    moveIconBy,
+    restoreFromIcon,
+    toggleMinimized,
     getMainWindow,
     getWindowBounds,
     getWindowOpacityLevel,

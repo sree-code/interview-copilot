@@ -102,7 +102,7 @@ If no interviewer text appears: make sure sound plays through your **default** o
 | Alt+Shift+S | Screenshot |
 | Alt+Shift+E | Screen AI (answer from screenshot) |
 | Alt+Shift+G | Suggest |
-| Alt+Shift+H | Show / hide window |
+| Alt+Shift+H | Hide to a small faint icon / show (or click the icon) |
 | Alt+Shift+M | Compact mode (latest answer only) on / off |
 | Alt+Shift+W | Move window to top center, under the webcam |
 | Alt+Shift+Left / Right | Previous / next answer |

@@ -26,6 +26,11 @@ function createEventActions(ipcRenderer) {
     label: 'onEmergencyClear'
   });
 
+  const onWindowMinimized = createEventListener(ipcRenderer, {
+    channel: 'window-minimized',
+    label: 'onWindowMinimized'
+  });
+
   const onError = createEventListener(ipcRenderer, {
     channel: 'error',
     label: 'onError'
@@ -142,6 +147,7 @@ function createEventActions(ipcRenderer) {
     onAnalysisResult,
     onSetStealthMode,
     onEmergencyClear,
+    onWindowMinimized,
     onError,
     onVoiceTranscript,
     onVoiceError,

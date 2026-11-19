@@ -12,6 +12,7 @@ import { Conversation } from './components/Conversation.jsx';
 import { CompactView } from './components/CompactView.jsx';
 import { ResizeHandles } from './components/ResizeHandles.jsx';
 import { BetaGate } from './components/BetaGate.jsx';
+import { MiniIcon } from './components/MiniIcon.jsx';
 import { useLocalShortcuts } from './components/useLocalShortcuts.js';
 
 // Settings is the biggest part of the UI and isn't needed at startup.
@@ -94,6 +95,14 @@ export function App() {
   const missing = [];
   if (state.ready && !state.hasAssemblyKey) missing.push('AssemblyAI key (transcription)');
   if (state.ready && !state.hasModelKey) missing.push('AI model key (answers)');
+
+  if (state.minimized && !gated) {
+    return (
+      <Theme theme={neutralTheme} mode={state.theme === 'dark' ? 'dark' : 'light'}>
+        <MiniIcon />
+      </Theme>
+    );
+  }
 
   return (
     <Theme theme={neutralTheme} mode={state.theme === 'dark' ? 'dark' : 'light'}>

@@ -132,7 +132,7 @@ export function TopBar({ onOpenSettings, onClose }) {
         />
         <IconButton label="Compact mode" tooltip="Compact: latest answer only (Alt+Shift+M)" icon={<Icon icon={Minimize2} />} variant="ghost" size="sm" onClick={() => actions.setCompact(true)} />
         <IconButton label="Settings" tooltip="Settings" icon={<Icon icon={Settings} />} variant="ghost" size="sm" onClick={() => onOpenSettings('ai')} />
-        <IconButton label="Hide window" tooltip="Hide (Alt+Shift+X)" icon={<Icon icon={EyeOff} />} variant="ghost" size="sm" onClick={actions.hideNow} />
+        <IconButton label="Hide window" tooltip="Hide to a small icon (Alt+Shift+H)" icon={<Icon icon={EyeOff} />} variant="ghost" size="sm" onClick={actions.hideNow} />
         <IconButton label="Close app" tooltip="Close" icon={<Icon icon={X} />} variant="ghost" size="sm" onClick={onClose} />
       </div>
     </header>

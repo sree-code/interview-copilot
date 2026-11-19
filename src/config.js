@@ -92,13 +92,13 @@ const KEYBOARD_SHORTCUTS = [
   {
     id: 'emergencyHide',
     buttonLabel: 'Hide',
-    description: 'Emergency hide',
+    description: 'Hide to a small icon / show again',
     accelerator: 'Alt+Shift+X'
   },
   {
     id: 'toggleStealth',
-    buttonLabel: 'Toggle Stealth',
-    description: 'Toggle stealth mode',
+    buttonLabel: 'Hide / show',
+    description: 'Hide to a small icon / show again',
     accelerator: 'Alt+Shift+H'
   },
   {

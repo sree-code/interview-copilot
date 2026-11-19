@@ -58,7 +58,7 @@ Copy both keys into a note for now. **Don't paste them into the Claude chat.** Y
 | Alt+Shift+S, then Alt+Shift+E | Screenshot, then answer from it (coding problems) |
 | Alt+Shift+W | Put the window back under the webcam |
 | Alt+Shift+D | Move it to your other monitor |
-| Alt+Shift+H | Hide / show |
+| Alt+Shift+H | Hide to a small faint icon / show (or click the icon) |
 
 The window is hidden from screen sharing on Windows 10 (2004+) and Windows 11. Test it once: share your whole screen in a test call and check that it doesn't appear.
 

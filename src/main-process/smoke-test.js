@@ -95,6 +95,15 @@ async function captureScreens(contents, dir) {
   await shot('compact-bigger-text');
   await contents.executeJavaScript('window.__copilotStore?.actions.zoomText("reset")');
   await contents.executeJavaScript('window.__copilotStore?.actions.setCompact(false)');
+  // Hide: the window shrinks to a small icon; a new answer adds a dot.
+  await contents.executeJavaScript('window.__copilotStore?.actions.hideNow()');
+  await shot('hidden-icon');
+  send('ai-stream-start', { actionId: 'autoAnswer', answerId: 'demo-4', label: 'Suggested answer' });
+  send('ai-stream-chunk', { actionId: 'autoAnswer', answerId: 'demo-4', text: 'Another answer.' });
+  send('ai-stream-end', { actionId: 'autoAnswer', answerId: 'demo-4' });
+  await shot('hidden-icon-new-answer');
+  await contents.executeJavaScript('window.__copilotStore?.actions.restoreWindow()');
+  await shot('shown-again');
 }
 
 function runSmokeTest({ app, mainWindow }) {

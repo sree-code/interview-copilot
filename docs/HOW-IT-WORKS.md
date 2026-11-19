@@ -60,7 +60,7 @@ With fast mode off, nothing answers automatically. Use the buttons instead.
 | ⋯ → Notes / Insights | The conversation → meeting notes / insights |
 | ⋯ → Answer the last question now | Forces the fast-mode answer for the latest question |
 | Eye icon on a line | Includes or excludes that line from AI context |
-| Hide (Alt+Shift+X) | Hides the window instantly |
+| Hide (Alt+Shift+H or Alt+Shift+X) | Shrinks the window to a small, faint round icon in the same spot (still hidden from screen sharing). Click the icon or press the shortcut again to bring the window back; drag the icon to move it. A green dot means a new answer arrived while hidden |
 | Compact (Alt+Shift+M) | Small strip with only the interviewer's latest line and the latest answer, at the top center under the webcam |
 | Under webcam (Alt+Shift+W) | Moves the window to the top center of its screen |
 | Previous / next answer (Alt+Shift+Left / Right) | Compact mode shows one answer at a time; flip back to earlier ones. Next on the last one follows the latest again |

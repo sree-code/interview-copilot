@@ -91,6 +91,10 @@ export function createSessionStore(api = window.electronAPI) {
     mobile: { listening: false, port: 7823, urls: [], clientCount: 0, error: null },
     interview: null,
     hidden: false,
+    // Hidden to the small icon; answersAtHide lets the icon show a dot
+    // when a new answer arrives meanwhile.
+    minimized: false,
+    answersAtHide: 0,
     theme: 'light',
     compact: false,
     backgroundLevel: readBackgroundLevel(),
@@ -446,6 +450,12 @@ export function createSessionStore(api = window.electronAPI) {
   async function hideNow() {
     try { await api.emergencyHide(); } catch (_) { /* ignore */ }
   }
+  async function restoreWindow() {
+    try { await api.restoreFromIcon?.(); } catch (_) { /* ignore */ }
+  }
+  function moveIconBy(dx, dy) {
+    api.moveIconBy?.(dx, dy);
+  }
   async function closeApp() {
     transcriptBuffer.flushAllFinalTranscripts('app-close');
     try { await api.closeApp(); } catch (_) { /* ignore */ }
@@ -627,6 +637,11 @@ export function createSessionStore(api = window.electronAPI) {
       screenAiStream = null;
     });
     api.onEmergencyClear(() => set({ hidden: true }));
+    api.onWindowMinimized?.((value) => {
+      const minimized = Boolean(value);
+      const answers = getState().messages.filter((m) => m.type === 'ai-response').length;
+      set(minimized ? { minimized, answersAtHide: answers } : { minimized });
+    });
     api.onError((message) => toast(message, 'error'));
 
     api.onVoskStatus((data) => {
@@ -768,6 +783,8 @@ export function createSessionStore(api = window.electronAPI) {
       clearAll,
       hideNow,
       closeApp,
+      restoreWindow,
+      moveIconBy,
       toggleInclusion,
       addManualContext,
       saveSettings,

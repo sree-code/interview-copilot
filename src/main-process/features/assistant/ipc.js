@@ -245,6 +245,9 @@ function registerAssistantIpc({
     return windowController.emergencyHide();
   });
 
+  ipcMain.handle('restore-from-icon', () => windowController.restoreFromIcon());
+  ipcMain.on('move-icon-by', (_event, delta = {}) => windowController.moveIconBy(delta.dx, delta.dy));
+
   ipcMain.handle('take-stealth-screenshot', async () => {
     return screenshotManager.takeStealthScreenshot();
   });
